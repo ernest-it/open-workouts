@@ -3,13 +3,14 @@
     "name": "Open Workouts",
     "slug": "open-workouts",
     "scheme": "openworkouts",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "org.openworkouts.app",
+      "buildNumber": "201",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
@@ -19,6 +20,7 @@
     },
     "android": {
       "package": "org.openworkouts.app",
+      "versionCode": 201,
       "adaptiveIcon": {
         "backgroundColor": "#2f6df6",
         "foregroundImage": "./assets/android-icon-foreground.png",

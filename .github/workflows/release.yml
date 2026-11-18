@@ -1,0 +1,162 @@
+name: Release
+
+# Builds the mobile apps for a version tag (v*) and attaches them to the GitHub release.
+# The Docker image for the same tag is published by ci.yml.
+#
+# Android: a release APK. Signed with the release key when these repository secrets are set:
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS
+# Without them the APK is only kept as a workflow artifact (a throwaway debug key would stop
+# users from installing later updates over it).
+#
+# iOS: an unsigned .ipa (re-sign it with AltStore, Sideloadly or your own Apple account) and a
+# simulator build. The simulator build is smoke-tested on the smallest and largest iPhone
+# simulators, and screenshots are kept as a workflow artifact.
+#
+# Run it by hand (workflow_dispatch) to build and test without publishing anything.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci
+      - run: npx expo prebuild --platform android --no-install
+      - name: Build release APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Sign with the release key
+        id: sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          version=$(node -p "require('./app.json').expo.version")
+          mkdir -p "$RUNNER_TEMP/out"
+          apk="$RUNNER_TEMP/out/open-workouts-$version.apk"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::Android signing secrets are not set; the APK is debug-signed and will not be attached to the release."
+            cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/out/open-workouts-$version-debug-signed.apk"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-pass env:KEYSTORE_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" --out "$apk" android/app/build/outputs/apk/release/app-release.apk
+          "$apksigner" verify --print-certs "$apk" | head -3
+          rm "$RUNNER_TEMP/release.keystore"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ runner.temp }}/out/*.apk
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - run: npx expo prebuild --platform ios
+      - name: Build (device, unsigned) and simulator
+        run: |
+          ws=$(ls -d ios/*.xcworkspace | head -1); scheme=$(basename "$ws" .xcworkspace)
+          echo "SCHEME=$scheme" >> "$GITHUB_ENV"
+          for sdk in iphoneos iphonesimulator; do
+            dest='generic/platform=iOS'; [ $sdk = iphonesimulator ] && dest='generic/platform=iOS Simulator'
+            xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk $sdk -destination "$dest" \
+              -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              -quiet build
+          done
+      - name: Package
+        run: |
+          version=$(node -p "require('./app.json').expo.version")
+          out="$RUNNER_TEMP/out"; mkdir -p "$out/Payload"
+          cp -R "build/Build/Products/Release-iphoneos/$SCHEME.app" "$out/Payload/"
+          (cd "$out" && zip -qry "open-workouts-$version-unsigned.ipa" Payload && rm -rf Payload)
+          (cd build/Build/Products/Release-iphonesimulator && zip -qry "$out/open-workouts-$version-ios-simulator.zip" "$SCHEME.app")
+          ls -la "$out"
+      - name: Smoke test on the smallest and largest iPhone simulators
+        run: |
+          app="build/Build/Products/Release-iphonesimulator/$SCHEME.app"
+          bundle=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
+          shots="$RUNNER_TEMP/screenshots"; mkdir -p "$shots"
+          # Smallest and largest available iPhones by screen size (name order is not size order).
+          devices=$(xcrun simctl list devices available -j | node -e '
+            const d = Object.values(JSON.parse(require("fs").readFileSync(0)).devices).flat().filter((x) => /^iPhone/.test(x.name));
+            const rank = (n) => (/SE|mini|16e|17e/.test(n) ? 0 : /Pro Max|Plus|Air/.test(n) ? 2 : 1);
+            d.sort((a, b) => rank(a.name) - rank(b.name));
+            console.log([d[0], d[d.length - 1]].map((x) => x.udid + "|" + x.name).join("\n"));')
+          i=0
+          while IFS='|' read -r udid name; do
+            i=$((i+1)); mode=light; [ $i = 2 ] && mode=dark
+            echo "== $name ($mode)"
+            xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b >/dev/null
+            xcrun simctl ui "$udid" appearance $mode
+            xcrun simctl install "$udid" "$app"
+            xcrun simctl launch "$udid" "$bundle"
+            sleep 15
+            # Still running after 15 s = it got past JS start-up without crashing.
+            xcrun simctl spawn "$udid" launchctl list | grep -q "$bundle" || { echo "::error::App is not running on $name"; exit 1; }
+            xcrun simctl io "$udid" screenshot "$shots/$(echo "$name" | tr ' ()' '_--')-$mode.png"
+            xcrun simctl shutdown "$udid"
+          done <<< "$devices"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: ${{ runner.temp }}/out/*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-screenshots
+          path: ${{ runner.temp }}/screenshots
+
+  publish:
+    needs: [android, ios]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          SIGNED: ${{ needs.android.outputs.signed }}
+        run: |
+          files=(dist/ios/*)
+          [ "$SIGNED" = true ] && files+=(dist/android/*.apk)
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "Open Workouts ${TAG#v}" --generate-notes --verify-tag
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "${files[@]}"

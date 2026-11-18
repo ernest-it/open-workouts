@@ -35,7 +35,12 @@ docker compose up -d
 # open http://<host>:8080 and create your account
 ```
 
-Then, in the app, enter `http://<host>:8080`, or your HTTPS domain if you expose it. For Kubernetes, Proxmox, reverse proxies and backups, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Then install the app from the [latest release](https://github.com/ernest-it/open-workouts/releases/latest) and enter `<host>:8080`, or your HTTPS domain if you expose it:
+
+- **Android:** download and install the `.apk`.
+- **iOS:** sideload the unsigned `.ipa` with AltStore or Sideloadly. There is no App Store build yet.
+
+Prebuilt server images are at `ghcr.io/ernest-it/open-workouts:latest` (amd64 and arm64). For Kubernetes, Proxmox, reverse proxies and backups, see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ## Development
 
