@@ -21,7 +21,10 @@ export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
       if (body.name !== 'open-workouts') throw new Error('That is not an Open Workouts server');
       setInfo(body);
     } catch (e) {
-      setError(`Could not reach server: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      // An http-only server reached over https fails with an opaque TLS error; say what to try.
+      const hint = /SSL|TLS|certificate/i.test(msg) ? ' If your server has no HTTPS, start the address with http://' : '';
+      setError(`Could not reach ${normalizeServerUrl(url)}: ${msg}.${hint}`);
     } finally {
       setBusy(false);
     }
@@ -59,7 +62,7 @@ export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
               setUrl(v);
               setInfo(null);
             }}
-            placeholder="https://workouts.example.com or 192.168.1.10:8080"
+            placeholder="192.168.1.10:8080 or workouts.example.com"
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"

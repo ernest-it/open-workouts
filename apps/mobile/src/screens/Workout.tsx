@@ -16,7 +16,7 @@ import {
 } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore, type Prefs } from '../state';
-import { Button, Card, Chips, H2, Input, NumInput, Screen, T, label, showWeight, styles, useTheme } from '../ui';
+import { Button, Card, Chips, H2, Input, NumInput, Screen, Sheet, T, label, showWeight, styles, useTheme } from '../ui';
 
 export function WorkoutScreen() {
   const store = useStore();
@@ -112,8 +112,12 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
         <View style={styles.rowBetween}>
           <Input
             value={workout.name}
-            onChangeText={(v) => store.update('workouts', workout.id, { name: v })}
-            style={{ flex: 1, fontSize: 22, fontWeight: '700', borderWidth: 0, backgroundColor: 'transparent' }}
+            onChangeText={(v) => store.update('workouts', workout.id, { name: v.replace(/\n/g, ' ') })}
+            // Multiline so long names wrap instead of scrolling out of view on narrow phones.
+            multiline
+            submitBehavior="blurAndSubmit"
+            accessibilityLabel="Workout name"
+            style={{ flex: 1, fontSize: 22, fontWeight: '700', borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0 }}
           />
           {editing ? (
             <Button title="Done" variant="primary" small onPress={() => onDone?.()} />
@@ -238,11 +242,11 @@ function ExerciseBlock({
         />
       </View>
       <View style={[styles.row, local.headRow]}>
-        <T small muted style={local.cSet}>
+        <T small muted style={local.cSet} lines={1}>
           SET
         </T>
-        <T small muted style={local.cPrev}>
-          PREVIOUS
+        <T small muted style={local.cPrev} lines={1}>
+          PREV
         </T>
         {hasWeight && (
           <T small muted style={local.cNum}>
@@ -337,8 +341,8 @@ function SetRow({
       >
         <Text style={{ color: kindColor, fontWeight: '700', textAlign: 'center' }}>{setLabel}</Text>
       </Pressable>
-      <Pressable style={local.cPrev} onPress={onUsePrev}>
-        <T small muted>
+      <Pressable style={local.cPrev} onPress={onUsePrev} accessibilityLabel={onUsePrev ? `Use previous: ${prevText}` : undefined}>
+        <T small muted lines={1}>
           {prevText}
         </T>
       </Pressable>
@@ -412,8 +416,8 @@ export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean;
   const parts = ['all', ...new Set(all.map((e) => e.bodyPart))];
   const list = all.filter((e) => (part === 'all' || e.bodyPart === part) && e.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
-      <View style={{ flex: 1, backgroundColor: t.bg, padding: 16 }}>
+    <Sheet visible={visible} onClose={onClose}>
+      <View style={{ flex: 1, paddingHorizontal: 16 }}>
         <View style={styles.rowBetween}>
           <H2>Add exercise</H2>
           <Button small variant="ghost" title="Close" onPress={onClose} />
@@ -425,8 +429,10 @@ export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean;
           keyExtractor={(e) => e.id}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <Pressable onPress={() => onPick(item)} style={[local.pickRow, { borderColor: t.border }]}>
-              <T bold>{item.name}</T>
+            <Pressable onPress={() => onPick(item)} style={[local.pickRow, { borderColor: t.border }]} accessibilityRole="button">
+              <T bold style={{ flex: 1 }}>
+                {item.name}
+              </T>
               <T small muted>
                 {label(item.bodyPart)}
               </T>
@@ -434,17 +440,18 @@ export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean;
           )}
         />
       </View>
-    </Modal>
+    </Sheet>
   );
 }
 
 const local = StyleSheet.create({
   headRow: { marginTop: 8, paddingHorizontal: 4 },
   setRow: { paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6, marginTop: 2 },
-  cSet: { width: 32 },
-  cPrev: { flex: 1, minWidth: 60 },
-  cNum: { width: 64, textAlign: 'center' },
-  cCheck: { width: 38 },
+  // Number columns flex (capped) so a full row still fits a 320pt-wide phone with larger text.
+  cSet: { width: 28 },
+  cPrev: { flex: 1.2, minWidth: 0 },
+  cNum: { flex: 1, minWidth: 0, maxWidth: 72, textAlign: 'center' },
+  cCheck: { width: 40 },
   check: { height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   restBar: {
     position: 'absolute',
@@ -466,5 +473,5 @@ const local = StyleSheet.create({
   restProgress: { position: 'absolute', left: 0, bottom: 0, height: 3 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
   sheet: { borderRadius: 14, padding: 16 },
-  pickRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', justifyContent: 'space-between' },
+  pickRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

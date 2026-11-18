@@ -15,7 +15,9 @@ export function ProfileScreen({ account }: { account: Account }) {
   const total = store.all('workouts').filter((w) => w.endedAt != null).length;
   return (
     <Screen title={account.server?.username ?? 'Profile'}>
-      <T muted>{total} workouts</T>
+      <T muted>
+        {total} workout{total === 1 ? '' : 's'}
+      </T>
       <Card>
         <T bold>Workouts per week</T>
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 4, marginTop: 8 }}>

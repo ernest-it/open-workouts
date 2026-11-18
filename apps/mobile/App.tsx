@@ -125,7 +125,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
     <NavContext.Provider value={nav}>
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'left', 'right']}>
         {stack.length > 1 && (
-          <Pressable onPress={pop} style={styles.back} accessibilityRole="button">
+          <Pressable onPress={pop} style={styles.back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12}>
             <Text style={{ color: t.accent, fontSize: 16 }}>‹ Back</Text>
           </Pressable>
         )}
@@ -152,10 +152,23 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === x.key }}
           >
-            <Text style={{ fontSize: 20 }}>{x.icon}</Text>
-            <Text style={{ fontSize: 11, color: tab === x.key ? t.accent : t.muted, fontWeight: tab === x.key ? '700' : '400' }}>
+            <View>
+              <Text style={{ fontSize: 20, opacity: tab === x.key ? 1 : 0.75 }} maxFontSizeMultiplier={1.3}>
+                {x.icon}
+              </Text>
+              {x.key === 'workout' && s.activeWorkout() && (
+                <View accessibilityLabel="Workout in progress" style={[styles.badge, { backgroundColor: t.success, borderColor: t.surface }]} />
+              )}
+            </View>
+            {/* Six tabs share the width: keep labels on one line on 320pt phones / large text. */}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 11, color: tab === x.key ? t.accent : t.muted, fontWeight: tab === x.key ? '700' : '400' }}
+            >
               {x.label}
-              {x.key === 'workout' && s.activeWorkout() ? ' •' : ''}
             </Text>
           </Pressable>
         ))}
@@ -165,7 +178,8 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
 }
 
 const styles = StyleSheet.create({
-  back: { paddingHorizontal: 16, paddingTop: 8 },
+  back: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 8 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 6 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2 },
+  badge: { position: 'absolute', top: 0, right: -4, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
 });

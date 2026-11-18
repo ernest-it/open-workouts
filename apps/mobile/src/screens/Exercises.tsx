@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import {
   BODY_PARTS,
   EQUIPMENT,
@@ -15,7 +15,7 @@ import {
 } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore } from '../state';
-import { Button, Card, Chips, H2, Input, Screen, T, formatDate, label, showWeight, styles, useTheme } from '../ui';
+import { Button, Card, Chips, H2, Input, Screen, Sheet, T, formatDate, label, showWeight, styles, useTheme } from '../ui';
 
 export function ExercisesScreen() {
   const store = useStore();
@@ -66,7 +66,7 @@ function NewExercise({ onClose }: { onClose: () => void }) {
   const [equipment, setEquipment] = useState<Equipment>('barbell');
   const [bodyPart, setBodyPart] = useState<BodyPart>('chest');
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Sheet onClose={onClose}>
       <Screen title="New exercise">
         <View style={{ backgroundColor: t.bg }}>
           <Input value={name} onChangeText={setName} placeholder="Name, e.g. Landmine Press (Barbell)" autoFocus />
@@ -88,7 +88,7 @@ function NewExercise({ onClose }: { onClose: () => void }) {
           <Button title="Cancel" variant="ghost" onPress={onClose} />
         </View>
       </Screen>
-    </Modal>
+    </Sheet>
   );
 }
 

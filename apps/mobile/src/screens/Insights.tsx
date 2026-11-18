@@ -129,6 +129,7 @@ export function InsightsScreen({ account }: { account: Account }) {
           </T>
         </Card>
       )}
+      {enabled !== false && (
       <Card>
         <View style={styles.row}>
           <Button title="This week" variant="primary" small disabled={!enabled || busy} onPress={() => void run('/api/v1/insights/report', { days: 7 })} />
@@ -148,6 +149,7 @@ export function InsightsScreen({ account }: { account: Account }) {
           </T>
         )}
       </Card>
+      )}
       {reports.map((r) => (
         <Card key={r.id} onPress={() => setOpen(open === r.id ? null : r.id)}>
           <View style={styles.rowBetween}>

@@ -29,7 +29,8 @@ export function HistoryScreen() {
               </T>
             </View>
             <T small muted>
-              {formatDuration(sum.durationSeconds)} · {showWeight(sum.volume, prefs)} {prefs.weightUnit} · {sum.setCount} sets
+              {formatDuration(sum.durationSeconds)}
+              {sum.volume > 0 ? ` · ${showWeight(sum.volume, prefs)} ${prefs.weightUnit}` : ''} · {sum.setCount} set{sum.setCount === 1 ? '' : 's'}
             </T>
             {store.workoutExercises(w.id).map((we) => (
               <T key={we.id} small>
@@ -67,7 +68,8 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       right={<Button small title="Edit" onPress={() => setEditing(true)} />}
     >
       <T muted>
-        {formatDate(w.startedAt)} · {formatDuration(sum.durationSeconds)} · {showWeight(sum.volume, prefs)} {prefs.weightUnit}
+        {formatDate(w.startedAt)} · {formatDuration(sum.durationSeconds)}
+        {sum.volume > 0 ? ` · ${showWeight(sum.volume, prefs)} ${prefs.weightUnit}` : ''}
         {prs.size ? ` · 🏆 ${prs.size} PR${prs.size > 1 ? 's' : ''}` : ''}
       </T>
       {w.notes ? <T style={{ marginTop: 8 }}>{w.notes}</T> : null}

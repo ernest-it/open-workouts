@@ -101,6 +101,12 @@ export function usePrefs(): Prefs {
 
 export function normalizeServerUrl(input: string): string {
   let u = input.trim().replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
+  if (!/^https?:\/\//i.test(u)) {
+    // No scheme typed: LAN addresses (IPs, localhost, mDNS/home names) are almost always plain
+    // HTTP; public domains are expected to be behind HTTPS.
+    const host = u.split(/[/:]/)[0]!.toLowerCase();
+    const local = /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === 'localhost' || /\.(local|lan|home|internal|home\.arpa)$/.test(host) || !host.includes('.');
+    u = `${local ? 'http' : 'https'}://${u}`;
+  }
   return u;
 }
