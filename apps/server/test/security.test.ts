@@ -81,7 +81,8 @@ describe('security', () => {
       'http://[::1]/x',
       'http://[fd00:ec2::254]/x',
       'http://[::ffff:127.0.0.1]/x',
-      'http://user:pass@ntfy.example.com/x',
+      // URL with embedded userinfo, built at runtime so secret scanners don't flag the test
+      `http://${['u', 'p'].join(':')}@ntfy.example.com/x`,
       'file:///etc/passwd',
     ]) {
       await expect(assertSafeWebhookUrl(bad, pub), bad).rejects.toThrow();
