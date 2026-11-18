@@ -1,0 +1,106 @@
+# Open Workouts on Kubernetes.  kubectl apply -k deploy/k8s
+# SQLite => exactly one replica with a ReadWriteOnce volume and Recreate strategy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-workouts
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: open-workouts-data
+  namespace: open-workouts
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open-workouts
+  namespace: open-workouts
+data:
+  ALLOW_REGISTRATION: "false"
+  TRUST_PROXY: "true"
+  LOG_LEVEL: info
+  # AI insights (docs/AI_INSIGHTS.md). For Claude, put ANTHROPIC_API_KEY in a Secret
+  # and add it to the Deployment with envFrom/secretRef.
+  # LLM_PROVIDER: openai
+  # LLM_BASE_URL: http://ollama.ollama.svc:11434/v1
+  # LLM_MODEL: qwen3:14b
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-workouts
+  namespace: open-workouts
+  labels: { app: open-workouts }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: open-workouts }
+  template:
+    metadata:
+      labels: { app: open-workouts }
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        runAsNonRoot: true
+      containers:
+        - name: open-workouts
+          image: ghcr.io/ernest-it/open-workouts:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: open-workouts }
+            # - secretRef: { name: open-workouts-llm, optional: true }   # ANTHROPIC_API_KEY
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: open-workouts-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-workouts
+  namespace: open-workouts
+spec:
+  selector: { app: open-workouts }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+# Edit host/ingressClassName/TLS for your cluster (Traefik on k3s, ingress-nginx, ...).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: open-workouts
+  namespace: open-workouts
+spec:
+  rules:
+    - host: workouts.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: open-workouts, port: { name: http } }

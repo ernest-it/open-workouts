@@ -1,0 +1,43 @@
+# Quick start:  docker compose up -d   ->  http://localhost:8080
+services:
+  open-workouts:
+    build: .
+    # image: ghcr.io/<you>/open-workouts:latest   # once published by CI
+    container_name: open-workouts
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # The first account can always be created and becomes admin.
+      # Set to "true" to let more people register (family/gym server).
+      ALLOW_REGISTRATION: "false"
+      # Set when running behind a reverse proxy (Caddy, Traefik, nginx).
+      TRUST_PROXY: "false"
+      LOG_LEVEL: info
+      TZ: UTC  # also the time zone for scheduled weekly AI reports
+      # --- AI insights (optional, see docs/AI_INSIGHTS.md) ---
+      # Claude:
+      # LLM_PROVIDER: anthropic
+      # ANTHROPIC_API_KEY: sk-ant-...
+      # LLM_MODEL: claude-opus-5-5
+      # Local model via the ollama service below:
+      # LLM_PROVIDER: openai
+      # LLM_BASE_URL: http://ollama:11434/v1
+      # LLM_MODEL: qwen3:14b
+    volumes:
+      - open-workouts-data:/data
+
+  # Optional local LLM. Enable, then: docker compose exec ollama ollama pull qwen3:14b
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   restart: unless-stopped
+  #   environment:
+  #     OLLAMA_CONTEXT_LENGTH: "16384"
+  #   volumes:
+  #     - ollama-models:/root/.ollama
+  #   # GPU (NVIDIA): uncomment
+  #   # deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+
+volumes:
+  open-workouts-data:
+  # ollama-models:

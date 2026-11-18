@@ -1,0 +1,23 @@
+{
+  "name": "open-workouts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Source-available, self-hostable strength training tracker (server + web + mobile)",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "workspaces": [
+    "packages/shared",
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w @open-workouts/server",
+    "dev:web": "npm run dev -w @open-workouts/web",
+    "build": "npm run build -w @open-workouts/web && npm run build -w @open-workouts/server && npm run notices",
+    "test": "npm run test -w @open-workouts/shared && npm run test -w @open-workouts/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "notices": "node scripts/third-party-notices.mjs > apps/web/dist/third-party-notices.txt"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
