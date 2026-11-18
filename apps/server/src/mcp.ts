@@ -243,7 +243,7 @@ export function handleRpc(db: DB, userId: string, msg: JsonRpc) {
 }
 
 export function registerMcp(app: FastifyInstance, db: DB, authenticate: (req: FastifyRequest, reply: FastifyReply) => Promise<unknown>) {
-  app.post('/mcp', { preHandler: authenticate }, async (req, reply) => {
+  app.post('/mcp', { onRequest: authenticate }, async (req, reply) => {
     const body = req.body as JsonRpc | JsonRpc[];
     const msgs = Array.isArray(body) ? body : [body];
     if (!msgs.length || msgs.some((m) => !m || m.jsonrpc !== '2.0' || typeof m.method !== 'string')) {

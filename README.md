@@ -61,6 +61,7 @@ In the app, point it at your dev server's LAN IP, e.g. `http://192.168.1.20:8080
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Docker, Kubernetes, Proxmox, HTTPS, backups
 - [docs/AI_INSIGHTS.md](docs/AI_INSIGHTS.md): LLM reports, weekly updates, MCP setup
 - [docs/ROADMAP.md](docs/ROADMAP.md)
+- [SECURITY.md](SECURITY.md): running a server safely, reporting vulnerabilities
 
 ## License
 

@@ -30,6 +30,7 @@ export interface AppDeps {
   llm?: LlmProvider | null;
   now?: () => number;
   fetchImpl?: typeof fetch;
+  lookup?: (host: string) => Promise<string[]>;
 }
 
 export { VERSION };
@@ -54,9 +55,13 @@ const credentials = z.object({
 export function buildApp(config: Config, db: DB = openDatabase(config.databaseFile), deps: AppDeps = {}) {
   const app = Fastify({
     logger: config.logLevel === 'silent' ? false : { level: config.logLevel },
-    bodyLimit: 50 * 1024 * 1024,
+    // Small default limit; the few authenticated routes that need large bodies
+    // (sync, import) raise it per route. Authentication runs in onRequest, i.e.
+    // before any body is read, so anonymous clients can't make us buffer 50 MB.
+    bodyLimit: 1024 * 1024,
     trustProxy: config.trustProxy,
   });
+  const LARGE_BODY = 50 * 1024 * 1024;
   const authLimiter = new RateLimiter(20, 15 * 60 * 1000);
 
   ensureInsightsTables(db);
@@ -67,6 +72,8 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
     now: deps.now,
     fetchImpl: deps.fetchImpl,
     allowWebhooks: config.insights.allowWebhooks,
+    aiRequestsPerHour: config.insights.aiRequestsPerHour,
+    lookup: deps.lookup,
     log: { info: (m) => app.log.info(m), warn: (m) => app.log.warn(m) },
   };
   if (config.insights.scheduler && insights.llm) {
@@ -76,6 +83,17 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
     app.addHook('onReady', async () => tick());
     app.addHook('onClose', async () => clearInterval(timer));
   }
+
+  app.addHook('onSend', async (_req, reply) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('referrer-policy', 'no-referrer');
+    reply.header('x-frame-options', 'DENY');
+    reply.header(
+      'content-security-policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; " +
+        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    );
+  });
 
   app.register(cors, { origin: config.corsOrigins.length ? config.corsOrigins : true, credentials: false });
 
@@ -116,19 +134,26 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
     if (!authLimiter.allow(`reg:${req.ip}`)) return reply.code(429).send({ error: 'too many attempts' });
     if (!registrationOpen()) return reply.code(403).send({ error: 'registration is disabled on this server' });
     const body = credentials.parse(req.body);
-    const exists = db.prepare('SELECT 1 FROM users WHERE username = ?').get(body.username);
-    if (exists) return reply.code(409).send({ error: 'username already taken' });
-    const id = crypto.randomUUID();
-    const isAdmin = userCount() === 0 ? 1 : 0;
-    db.prepare('INSERT INTO users (id, username, passwordHash, isAdmin, createdAt) VALUES (?, ?, ?, ?, ?)').run(
-      id,
-      body.username,
-      await hashPassword(body.password),
-      isAdmin,
-      Date.now(),
-    );
-    const { token } = createSession(db, id, body.deviceName ?? 'unknown device');
-    return reply.code(201).send({ token, user: { id, username: body.username, isAdmin: !!isAdmin } });
+    const passwordHash = await hashPassword(body.password);
+    // Re-check everything synchronously after the (slow) hash so concurrent
+    // sign-ups can't both become admin or slip in after registration closes.
+    const result = db.transaction(() => {
+      if (!registrationOpen()) return { status: 403 as const, error: 'registration is disabled on this server' };
+      if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(body.username)) return { status: 409 as const, error: 'username already taken' };
+      const id = crypto.randomUUID();
+      const isAdmin = userCount() === 0 ? 1 : 0;
+      db.prepare('INSERT INTO users (id, username, passwordHash, isAdmin, createdAt) VALUES (?, ?, ?, ?, ?)').run(
+        id,
+        body.username,
+        passwordHash,
+        isAdmin,
+        Date.now(),
+      );
+      return { status: 201 as const, id, isAdmin };
+    }).immediate();
+    if (result.status !== 201) return reply.code(result.status).send({ error: result.error });
+    const { token } = createSession(db, result.id, body.deviceName ?? 'unknown device');
+    return reply.code(201).send({ token, user: { id: result.id, username: body.username, isAdmin: !!result.isAdmin } });
   });
 
   app.post('/api/v1/auth/login', async (req, reply) => {
@@ -148,7 +173,7 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
 
   // ---- authenticated --------------------------------------------------------
   app.register(async (r) => {
-    r.addHook('preHandler', requireUser);
+    r.addHook('onRequest', requireUser);
 
     r.get('/api/v1/me', async (req) => ({
       id: req.user!.id,
@@ -190,7 +215,7 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
       return createSession(db, req.user!.id, `token: ${body.name}`);
     });
 
-    r.post('/api/v1/sync', async (req) => {
+    r.post('/api/v1/sync', { bodyLimit: LARGE_BODY }, async (req) => {
       const body = syncRequestSchema.parse(req.body);
       const { rejected } = applyChanges(db, req.user!.id, body.changes);
       const pulled = pullChanges(db, req.user!.id, body.since);
@@ -199,6 +224,7 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
 
     r.post<{ Querystring: { weightUnit?: string; distanceUnit?: string; tzOffset?: string } }>(
       '/api/v1/import/strong',
+      { bodyLimit: LARGE_BODY },
       async (req, reply) => {
         const text = typeof req.body === 'string' ? req.body : (req.body as { csv?: string })?.csv;
         if (!text) return reply.code(400).send({ error: 'send the CSV as text/csv body or {"csv": "..."}' });
@@ -247,7 +273,11 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
 
     registerInsightsRoutes(r, insights);
 
-    r.delete('/api/v1/me', async (req) => {
+    /** Delete the account and all its data. Requires the password, not just a token. */
+    r.delete('/api/v1/me', async (req, reply) => {
+      const body = z.object({ password: z.string().min(1).max(256) }).parse(req.body ?? {});
+      const u = db.prepare('SELECT passwordHash FROM users WHERE id = ?').get(req.user!.id) as { passwordHash: string };
+      if (!(await verifyPassword(body.password, u.passwordHash))) return reply.code(401).send({ error: 'password is wrong' });
       db.prepare('DELETE FROM users WHERE id = ?').run(req.user!.id);
       return { ok: true };
     });

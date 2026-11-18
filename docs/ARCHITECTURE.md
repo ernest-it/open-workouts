@@ -109,7 +109,7 @@ Authorization: Bearer <token>
 | `POST /api/v1/auth/login` | – | Same shape. Rate-limited per IP |
 | `POST /api/v1/auth/logout` | ✓ | Revokes the current token |
 | `POST /api/v1/auth/password` | ✓ | Changes the password and revokes the user's other sessions |
-| `GET /api/v1/me`, `DELETE /api/v1/me` | ✓ | Profile; delete the account and all its data |
+| `GET /api/v1/me`, `DELETE /api/v1/me` `{password}` | ✓ | Profile; delete the account and all its data (requires the password) |
 | `GET /api/v1/sessions`, `DELETE /api/v1/sessions/:id` | ✓ | List and revoke devices |
 | `POST /api/v1/tokens` | ✓ | Create a named long-lived API token |
 | `POST /api/v1/sync` | ✓ | See above |

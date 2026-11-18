@@ -124,7 +124,14 @@ describe('insights API', () => {
 
 // Access the app's database through the test-only decorator.
 function getDeps(llm: LlmProvider, fetchImpl: typeof fetch) {
-  return { db: (app as unknown as { owDb: import('../src/db').DB }).owDb, llm, now: () => NOW, fetchImpl, allowWebhooks: true };
+  return {
+    db: (app as unknown as { owDb: import('../src/db').DB }).owDb,
+    llm,
+    now: () => NOW,
+    fetchImpl,
+    allowWebhooks: true,
+    lookup: async () => ['93.184.215.14'], // pretend ntfy.example.com resolves to a public IP
+  };
 }
 
 describe('MCP endpoint', () => {

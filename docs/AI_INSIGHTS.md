@@ -81,7 +81,8 @@ environment:
 | Variable | Default | Meaning |
 |---|---|---|
 | `INSIGHTS_SCHEDULER` | `true` | Generate scheduled weekly reports (checked every 10 minutes) |
-| `INSIGHTS_ALLOW_WEBHOOKS` | `true` | Let users configure notification URLs. The server POSTs to whatever URL a user enters. On a server with untrusted users, set this to `false` |
+| `INSIGHTS_ALLOW_WEBHOOKS` | `true` | Let users configure notification URLs. URLs pointing at loopback, link-local or cloud-metadata addresses are refused and redirects aren't followed; private LAN addresses are allowed. On a server with untrusted users, set this to `false` |
+| `INSIGHTS_AI_REQUESTS_PER_HOUR` | `30` | Per-user cap on reports, comparisons and questions (protects your API bill) |
 | `TZ` | `UTC` | Time zone for "weekly on Monday after 07:00" |
 
 ## Weekly updates and notifications

@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import dns from 'node:dns';
+import net from 'node:net';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   BUILTIN_EXERCISES,
@@ -15,6 +17,7 @@ import {
   type WorkoutSet,
 } from '@open-workouts/shared';
 import type { DB } from './db';
+import { RateLimiter } from './auth';
 import { LlmError, type LlmProvider } from './llm';
 import { allRows } from './sync';
 
@@ -122,7 +125,52 @@ export interface InsightsDeps {
   now?: () => number;
   fetchImpl?: typeof fetch;
   allowWebhooks: boolean;
+  /** Max AI requests (reports, comparisons, questions) per user per hour. */
+  aiRequestsPerHour?: number;
+  /** DNS resolver used to vet webhook hosts (injectable for tests). */
+  lookup?: (host: string) => Promise<string[]>;
   log?: { info: (msg: string) => void; warn: (msg: string) => void };
+}
+
+// ---------------------------------------------------------------------------
+// Webhook target vetting (server-side request forgery protection)
+// ---------------------------------------------------------------------------
+
+/**
+ * Addresses a webhook may never reach: loopback, link-local (including cloud
+ * metadata endpoints such as 169.254.169.254), unspecified and multicast.
+ * Private LAN ranges stay allowed on purpose: a self-hosted ntfy server on the
+ * home network is the main use case.
+ */
+const BLOCKED = new net.BlockList();
+BLOCKED.addSubnet('127.0.0.0', 8, 'ipv4');
+BLOCKED.addSubnet('0.0.0.0', 8, 'ipv4');
+BLOCKED.addSubnet('169.254.0.0', 16, 'ipv4');
+BLOCKED.addSubnet('224.0.0.0', 4, 'ipv4');
+BLOCKED.addSubnet('100.100.100.200', 32, 'ipv4'); // Alibaba metadata
+BLOCKED.addAddress('::1', 'ipv6');
+BLOCKED.addAddress('::', 'ipv6');
+BLOCKED.addSubnet('fe80::', 10, 'ipv6');
+BLOCKED.addSubnet('ff00::', 8, 'ipv6');
+BLOCKED.addAddress('fd00:ec2::254', 'ipv6'); // AWS metadata
+
+function isBlockedAddress(ip: string): boolean {
+  const mapped = ip.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) return BLOCKED.check(mapped[1]!, 'ipv4');
+  return BLOCKED.check(ip, net.isIPv6(ip) ? 'ipv6' : 'ipv4');
+}
+
+const defaultLookup = async (host: string) => (await dns.promises.lookup(host, { all: true, verbatim: true })).map((a) => a.address);
+
+export async function assertSafeWebhookUrl(raw: string, lookup = defaultLookup): Promise<void> {
+  const url = new URL(raw);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new LlmError('Webhook URL must use http or https.');
+  if (url.username || url.password) throw new LlmError('Webhook URL must not contain credentials.');
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) throw new LlmError('Webhook URL must not point at this server.');
+  const addresses = net.isIP(host) ? [host] : await lookup(host).catch(() => []);
+  if (!addresses.length) throw new LlmError(`Webhook host ${host} could not be resolved.`);
+  if (addresses.some(isBlockedAddress)) throw new LlmError('Webhook URL points at a loopback, link-local or metadata address, which is not allowed.');
 }
 
 function requireLlm(llm: LlmProvider | null): LlmProvider {
@@ -193,14 +241,19 @@ export async function sendWebhook(
   hook: NonNullable<InsightsSettings['webhook']>,
   report: InsightReport,
   fetchImpl: typeof fetch = fetch,
+  lookup?: (host: string) => Promise<string[]>,
 ) {
+  await assertSafeWebhookUrl(hook.url, lookup);
   const signal = AbortSignal.timeout(15_000);
+  // Never follow redirects: a vetted URL could otherwise bounce to an internal one.
+  const redirect = 'error' as const;
   if (hook.format === 'ntfy') {
     await fetchImpl(hook.url, {
       method: 'POST',
       headers: { Title: report.title, Markdown: 'yes', Tags: 'muscle' },
       body: report.content,
       signal,
+      redirect,
     });
   } else if (hook.format === 'discord') {
     const content = `**${report.title}**\n${report.content}`;
@@ -209,6 +262,7 @@ export async function sendWebhook(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ content: content.length > 1990 ? `${content.slice(0, 1985)}…` : content }),
       signal,
+      redirect,
     });
   } else {
     await fetchImpl(hook.url, {
@@ -216,6 +270,7 @@ export async function sendWebhook(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: report.title, content: report.content, kind: report.kind, createdAt: report.createdAt }),
       signal,
+      redirect,
     });
   }
 }
@@ -241,7 +296,7 @@ export async function runScheduledReports(deps: InsightsDeps): Promise<InsightRe
       created.push(report);
       deps.log?.info(`weekly insights report created for user ${userId}`);
       if (s.webhook && deps.allowWebhooks) {
-        await sendWebhook(s.webhook, report, deps.fetchImpl).catch((e) => deps.log?.warn(`webhook failed: ${(e as Error).message}`));
+        await sendWebhook(s.webhook, report, deps.fetchImpl, deps.lookup).catch((e) => deps.log?.warn(`webhook failed: ${(e as Error).message}`));
       }
     } catch (e) {
       deps.log?.warn(`weekly report failed for user ${userId}: ${(e as Error).message}`);
@@ -264,6 +319,13 @@ export function registerInsightsRoutes(r: FastifyInstance, deps: InsightsDeps) {
     throw e;
   };
   const daysQ = z.coerce.number().int().min(1).max(365);
+  // Each AI request costs money (or local GPU time): cap them per user.
+  const aiLimiter = new RateLimiter(deps.aiRequestsPerHour ?? 30, 60 * 60_000);
+  const limitAi = async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!aiLimiter.allow(req.user!.id)) {
+      return reply.code(429).send({ error: 'AI request limit reached for this hour. Try again later.' });
+    }
+  };
 
   r.get('/api/v1/insights/status', async () => ({
     enabled: !!deps.llm,
@@ -280,17 +342,17 @@ export function registerInsightsRoutes(r: FastifyInstance, deps: InsightsDeps) {
     return reply.header('content-type', 'text/markdown; charset=utf-8').send(text);
   });
 
-  r.post('/api/v1/insights/report', async (req) => {
+  r.post('/api/v1/insights/report', { preHandler: limitAi }, async (req) => {
     const body = z.object({ days: daysQ.default(7) }).parse(req.body ?? {});
     return generateReport(deps, req.user!.id, body.days).catch(fail);
   });
 
-  r.post('/api/v1/insights/compare', async (req) => {
+  r.post('/api/v1/insights/compare', { preHandler: limitAi }, async (req) => {
     const body = z.object({ a: z.string().min(1), b: z.string().min(1).optional() }).parse(req.body);
     return generateComparison(deps, req.user!.id, body.a, body.b).catch(fail);
   });
 
-  r.post('/api/v1/insights/ask', async (req) => {
+  r.post('/api/v1/insights/ask', { preHandler: limitAi }, async (req) => {
     const body = z.object({ question: z.string().trim().min(3).max(2000), days: daysQ.default(28) }).parse(req.body);
     return answerQuestion(deps, req.user!.id, body.question, body.days).catch(fail);
   });
@@ -321,7 +383,11 @@ export function registerInsightsRoutes(r: FastifyInstance, deps: InsightsDeps) {
       model: null,
       createdAt: Date.now(),
     };
-    await sendWebhook(s.webhook, report, deps.fetchImpl);
+    try {
+      await sendWebhook(s.webhook, report, deps.fetchImpl, deps.lookup);
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
     return { ok: true };
   });
 }

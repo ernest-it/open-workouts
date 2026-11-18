@@ -22,6 +22,8 @@ export interface Config {
     scheduler: boolean;
     /** Allow users to configure webhook notifications (ntfy, Discord, generic JSON). */
     allowWebhooks: boolean;
+    /** Max AI requests per user per hour. */
+    aiRequestsPerHour: number;
   };
 }
 
@@ -52,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     insights: {
       scheduler: bool(env.INSIGHTS_SCHEDULER, true),
       allowWebhooks: bool(env.INSIGHTS_ALLOW_WEBHOOKS, true),
+      aiRequestsPerHour: Math.max(1, Number(env.INSIGHTS_AI_REQUESTS_PER_HOUR ?? 30) || 30),
     },
   };
 }

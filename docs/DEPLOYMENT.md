@@ -26,6 +26,7 @@ Open Workouts is **one process with one SQLite file**. Pick whichever platform y
 | `LLM_PROVIDER` | *(unset)* | `anthropic` (Claude) or `openai` (any OpenAI-compatible endpoint, e.g. Ollama). Enables AI insights; see [AI_INSIGHTS.md](AI_INSIGHTS.md) |
 | `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_EFFORT` | | Model settings. `ANTHROPIC_API_KEY` also works for Claude |
 | `INSIGHTS_SCHEDULER` / `INSIGHTS_ALLOW_WEBHOOKS` | `true` / `true` | Scheduled weekly reports; user-configured notification URLs |
+| `INSIGHTS_AI_REQUESTS_PER_HOUR` | `30` | Per-user cap on AI reports, comparisons and questions |
 | `TZ` | `UTC` | Time zone used for scheduled weekly reports |
 
 ## Docker / Compose
@@ -34,7 +35,7 @@ Open Workouts is **one process with one SQLite file**. Pick whichever platform y
 git clone https://github.com/ernest-it/open-workouts.git
 cd open-workouts
 docker compose up -d          # builds the image the first time
-open http://localhost:8080    # create your account (the first one becomes admin)
+open http://localhost:8080    # create your account right away: the first one becomes admin
 ```
 
 Once CI publishes images, replace `build: .` with `image: ghcr.io/ernest-it/open-workouts:latest` in `docker-compose.yml`. The images are multi-arch (amd64 and arm64), so they also run on a Raspberry Pi 4/5.
@@ -114,6 +115,10 @@ Re-run the script to upgrade. Put extra settings in `/etc/default/open-workouts`
 ### Option B: VM or LXC running Docker
 
 Install Docker in a Debian VM, or in an LXC with `--features nesting=1,keyctl=1`, then follow the [Compose](#docker--compose) steps.
+
+## Security
+
+See [SECURITY.md](../SECURITY.md) for how to run a server safely and how to report vulnerabilities.
 
 ## Backups
 
