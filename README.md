@@ -14,6 +14,15 @@ The model is the fast "templates → live workout → history and PRs" loop that
   - **Built in:** weekly training updates pushed to your phone, "compare with previous workout", and questions about your training. Uses Claude or a local model (Ollama).
   - **Your own assistant:** Claude Desktop, Claude Code or another AI assistant can read your log through the built-in MCP server.
 
+<p align="center">
+  <img src="docs/screenshots/android/03-active-workout.png" width="200" alt="Live workout">
+  <img src="docs/screenshots/android/07-workout-detail.png" width="200" alt="Workout with PRs">
+  <img src="docs/screenshots/android/10-exercise-chart.png" width="200" alt="Progress chart">
+  <img src="docs/screenshots/android/dark-history.png" width="200" alt="History in dark mode">
+</p>
+
+<p align="center"><a href="docs/SCREENSHOTS.md">More screenshots: every screen of the app and the web UI</a></p>
+
 ## Features
 
 | | |
