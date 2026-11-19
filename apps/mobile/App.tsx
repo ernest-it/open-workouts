@@ -20,16 +20,23 @@ export default function App() {
     void loadAccount().then(setAccount);
   }, []);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!account) return;
     setReady(false);
-    void initStore(account).then(() => setReady(true));
-  }, [account]);
+    setLoadError(null);
+    initStore(account)
+      .then(() => setReady(true))
+      .catch((e: Error) => setLoadError(e.message || String(e)));
+  }, [account, attempt]);
 
   return (
     <SafeAreaProvider>
       <StatusBar style="auto" />
-      {account === undefined || (account && !ready) ? (
+      {loadError ? (
+        <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
+      ) : account === undefined || (account && !ready) ? (
         <Center>
           <ActivityIndicator />
         </Center>
@@ -67,7 +74,20 @@ function Center({ children }: { children: React.ReactNode }) {
   return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg }}>{children}</View>;
 }
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useTheme();
+  return (
+    <Center>
+      <Text style={{ color: t.text, fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Could not open your data</Text>
+      <Text style={{ color: t.muted, textAlign: 'center', marginHorizontal: 24, marginBottom: 16 }}>{message}</Text>
+      <Pressable onPress={onRetry} accessibilityRole="button" style={{ padding: 12 }}>
+        <Text style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>Try again</Text>
+      </Pressable>
+    </Center>
+  );
+}
+
+const TABS:{ key: Tab; label: string; icon: string }[] = [
   { key: 'profile', label: 'Profile', icon: '👤' },
   { key: 'history', label: 'History', icon: '🕘' },
   { key: 'workout', label: 'Workout', icon: '➕' },

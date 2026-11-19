@@ -32,14 +32,28 @@ export interface Account {
 
 const ACCOUNT_KEY = 'ow.account';
 
+/**
+ * Never throws: if the keychain is unavailable (e.g. read before first unlock, missing
+ * entitlement, corrupt entry) the app falls back to the connect screen instead of hanging.
+ */
 export async function loadAccount(): Promise<Account | null> {
-  const raw = await SecureStore.getItemAsync(ACCOUNT_KEY);
-  return raw ? (JSON.parse(raw) as Account) : null;
+  try {
+    const raw = await SecureStore.getItemAsync(ACCOUNT_KEY);
+    return raw ? (JSON.parse(raw) as Account) : null;
+  } catch (e) {
+    console.warn('Could not read the saved account', e);
+    return null;
+  }
 }
 
+/** Best effort: if the keychain write fails the session still works, it just isn't remembered. */
 export async function saveAccount(a: Account | null) {
-  if (a) await SecureStore.setItemAsync(ACCOUNT_KEY, JSON.stringify(a));
-  else await SecureStore.deleteItemAsync(ACCOUNT_KEY);
+  try {
+    if (a) await SecureStore.setItemAsync(ACCOUNT_KEY, JSON.stringify(a));
+    else await SecureStore.deleteItemAsync(ACCOUNT_KEY);
+  } catch (e) {
+    console.warn('Could not save the account', e);
+  }
 }
 
 export let store: WorkoutStore;

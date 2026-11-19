@@ -92,12 +92,12 @@ jobs:
         run: |
           ws=$(ls -d ios/*.xcworkspace | head -1); scheme=$(basename "$ws" .xcworkspace)
           echo "SCHEME=$scheme" >> "$GITHUB_ENV"
-          for sdk in iphoneos iphonesimulator; do
-            dest='generic/platform=iOS'; [ $sdk = iphonesimulator ] && dest='generic/platform=iOS Simulator'
-            xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk $sdk -destination "$dest" \
-              -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-              -quiet build
-          done
+          # Device build: unsigned; sideloading tools re-sign it with the user's Apple ID.
+          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -quiet build
+          # Simulator build: ad-hoc signed so its entitlements (keychain) are present, as on a real install.
+          xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM="" -quiet build
       - name: Package
         run: |
           version=$(node -p "require('./app.json').expo.version")
@@ -114,7 +114,7 @@ jobs:
           # Smallest and largest available iPhones by screen size (name order is not size order).
           devices=$(xcrun simctl list devices available -j | node -e '
             const d = Object.values(JSON.parse(require("fs").readFileSync(0)).devices).flat().filter((x) => /^iPhone/.test(x.name));
-            const rank = (n) => (/SE|mini|16e|17e/.test(n) ? 0 : /Pro Max|Plus|Air/.test(n) ? 2 : 1);
+            const rank = (n) => (/SE|mini|\d+e\b/.test(n) ? 0 : /Pro Max/.test(n) ? 3 : /Plus|Air/.test(n) ? 2 : 1);
             d.sort((a, b) => rank(a.name) - rank(b.name));
             console.log([d[0], d[d.length - 1]].map((x) => x.udid + "|" + x.name).join("\n"));')
           i=0
