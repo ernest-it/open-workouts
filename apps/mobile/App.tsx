@@ -41,14 +41,14 @@ export default function App() {
           <ActivityIndicator />
         </Center>
       ) : account === null ? (
-        <SafeAreaView style={{ flex: 1 }}>
+        <ThemedSafeArea>
           <ConnectScreen
             onDone={(a) => {
               void saveAccount(a);
               setAccount(a);
             }}
           />
-        </SafeAreaView>
+        </ThemedSafeArea>
       ) : (
         <Main
           account={account}
@@ -72,6 +72,12 @@ export default function App() {
 function Center({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg }}>{children}</View>;
+}
+
+/** Paints the status bar / home indicator areas in the theme background (no white/black bands). */
+function ThemedSafeArea({ children }: { children: React.ReactNode }) {
+  const t = useTheme();
+  return <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>{children}</SafeAreaView>;
 }
 
 function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
