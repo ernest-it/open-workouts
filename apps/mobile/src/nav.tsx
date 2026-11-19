@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 /** Minimal stack navigation per tab (keeps native dependencies to a minimum). */
 export type Route =
   | { name: 'workout' }
+  | { name: 'templateDetail'; id: string }
   | { name: 'history' }
   | { name: 'workoutDetail'; id: string }
   | { name: 'exercises' }

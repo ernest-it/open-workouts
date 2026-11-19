@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { fromKg } from '@open-workouts/shared';
 import type { Prefs } from './state';
 
@@ -89,7 +90,16 @@ export function Sheet({ visible = true, onClose, children }: { visible?: boolean
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: (Platform.OS === 'android' ? insets.top : 0) + 8, paddingBottom: insets.bottom }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: t.bg,
+          paddingTop: (Platform.OS === 'android' ? insets.top : 0) + 8,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        }}
+      >
         <View style={styles.sheetBody}>{children}</View>
       </View>
     </Modal>
@@ -156,7 +166,19 @@ export function Input(props: TextInputProps) {
 }
 
 /** Numeric input that tolerates partial text ("1.", "") while typing. */
-export function NumInput({ value, onChange, style }: { value: number | null; onChange: (v: number | null) => void; style?: StyleProp<ViewStyle> }) {
+export function NumInput({
+  value,
+  onChange,
+  style,
+  placeholder,
+  accessibilityLabel,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  style?: StyleProp<ViewStyle>;
+  placeholder?: string;
+  accessibilityLabel?: string;
+}) {
   const [text, setText] = useState(value == null ? '' : String(value));
   useEffect(() => {
     const parsed = Number(text.replace(',', '.'));
@@ -166,6 +188,8 @@ export function NumInput({ value, onChange, style }: { value: number | null; onC
   return (
     <Input
       value={text}
+      placeholder={placeholder}
+      accessibilityLabel={accessibilityLabel}
       keyboardType="decimal-pad"
       selectTextOnFocus
       onChangeText={(s) => {
@@ -202,6 +226,34 @@ export function T({
   );
 }
 
+/** Round icon-only button with a 44pt touch target. */
+export function IconButton({
+  name,
+  onPress,
+  label: a11y,
+  color,
+  size = 20,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  label: string;
+  color?: string;
+  size?: number;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      hitSlop={8}
+      style={({ pressed }) => [styles.iconBtn, pressed && { backgroundColor: t.surface2 }]}
+    >
+      <Ionicons name={name} size={size} color={color ?? t.muted} />
+    </Pressable>
+  );
+}
+
 export function H2({ children }: { children: ReactNode }) {
   const t = useTheme();
   return <Text style={[styles.h2, { color: t.text }]}>{children}</Text>;
@@ -233,6 +285,17 @@ export const showWeight = (kg: number | null | undefined, prefs: Prefs) => (kg =
 export const formatDate = (ms: number) =>
   new Date(ms).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
+/** "today", "yesterday", "3 days ago", else a short date (year only when it differs). */
+export function relativeDay(ms: number, now = Date.now()) {
+  const day = (x: number) => Math.floor((x - new Date(x).getTimezoneOffset() * 60_000) / 86_400_000);
+  const diff = day(now) - day(ms);
+  if (diff <= 0) return 'today';
+  if (diff === 1) return 'yesterday';
+  if (diff < 7) return `${diff} days ago`;
+  const d = new Date(ms);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date(now).getFullYear() ? { year: 'numeric' } : {}) });
+}
+
 export const styles = StyleSheet.create({
   // Content is capped and centred so tablets don't get edge-to-edge lines.
   screen: { padding: 16, paddingBottom: 120, width: '100%', maxWidth: 720, alignSelf: 'center' },
@@ -247,5 +310,6 @@ export const styles = StyleSheet.create({
   num: { minWidth: 62, textAlign: 'center', paddingVertical: 6, marginVertical: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6, marginRight: 6 },
 });

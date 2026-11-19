@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { NavContext, type Nav, type Route, type Tab } from './src/nav';
 import { initStore, loadAccount, saveAccount, store, useStore, type Account } from './src/state';
 import { useTheme } from './src/ui';
 import { ConnectScreen } from './src/screens/Connect';
-import { WorkoutScreen } from './src/screens/Workout';
+import { TemplateDetailScreen, WorkoutScreen } from './src/screens/Workout';
+import { DialogProvider } from './src/dialog';
 import { HistoryScreen, WorkoutDetailScreen } from './src/screens/History';
 import { ExerciseDetailScreen, ExercisesScreen } from './src/screens/Exercises';
 import { ProfileScreen, SettingsScreen } from './src/screens/Profile';
@@ -33,6 +35,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+      <DialogProvider>
       <StatusBar style="auto" />
       {loadError ? (
         <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
@@ -65,6 +68,7 @@ export default function App() {
           }}
         />
       )}
+      </DialogProvider>
     </SafeAreaProvider>
   );
 }
@@ -93,13 +97,15 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
   );
 }
 
-const TABS:{ key: Tab; label: string; icon: string }[] = [
-  { key: 'profile', label: 'Profile', icon: '👤' },
-  { key: 'history', label: 'History', icon: '🕘' },
-  { key: 'workout', label: 'Workout', icon: '➕' },
-  { key: 'exercises', label: 'Exercises', icon: '🏋️' },
-  { key: 'insights', label: 'Insights', icon: '✨' },
-  { key: 'settings', label: 'Settings', icon: '⚙️' },
+type IconName = keyof typeof Ionicons.glyphMap;
+// Outline icon when inactive, filled when selected (same convention as iOS and Material).
+const TABS: { key: Tab; label: string; icon: IconName; iconOn: IconName }[] = [
+  { key: 'profile', label: 'Profile', icon: 'person-outline', iconOn: 'person' },
+  { key: 'history', label: 'History', icon: 'time-outline', iconOn: 'time' },
+  { key: 'workout', label: 'Workout', icon: 'add-circle-outline', iconOn: 'add-circle' },
+  { key: 'exercises', label: 'Exercises', icon: 'barbell-outline', iconOn: 'barbell' },
+  { key: 'insights', label: 'Insights', icon: 'sparkles-outline', iconOn: 'sparkles' },
+  { key: 'settings', label: 'Settings', icon: 'settings-outline', iconOn: 'settings' },
 ];
 
 function Main({ account, onSignOut }: { account: Account; onSignOut: () => void }) {
@@ -152,11 +158,15 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }} edges={['top', 'left', 'right']}>
         {stack.length > 1 && (
           <Pressable onPress={pop} style={styles.back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12}>
-            <Text style={{ color: t.accent, fontSize: 16 }}>‹ Back</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="chevron-back" size={22} color={t.accent} style={{ marginLeft: -6 }} />
+              <Text style={{ color: t.accent, fontSize: 16 }}>Back</Text>
+            </View>
           </Pressable>
         )}
         <View style={{ flex: 1 }}>
           {route.name === 'workout' && <WorkoutScreen />}
+          {route.name === 'templateDetail' && <TemplateDetailScreen id={route.id} />}
           {route.name === 'history' && <HistoryScreen />}
           {route.name === 'workoutDetail' && <WorkoutDetailScreen id={route.id} />}
           {route.name === 'exercises' && <ExercisesScreen />}
@@ -166,7 +176,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
           {route.name === 'settings' && <SettingsScreen account={account} onSignOut={onSignOut} />}
         </View>
       </SafeAreaView>
-      <SafeAreaView edges={['bottom']} style={[styles.tabBar, { backgroundColor: t.surface, borderColor: t.border }]}>
+      <SafeAreaView edges={['bottom', 'left', 'right']} style={[styles.tabBar, { backgroundColor: t.surface, borderColor: t.border }]}>
         {TABS.map((x) => (
           <Pressable
             key={x.key}
@@ -179,9 +189,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
             accessibilityState={{ selected: tab === x.key }}
           >
             <View>
-              <Text style={{ fontSize: 20, opacity: tab === x.key ? 1 : 0.75 }} maxFontSizeMultiplier={1.3}>
-                {x.icon}
-              </Text>
+              <Ionicons name={tab === x.key ? x.iconOn : x.icon} size={24} color={tab === x.key ? t.accent : t.muted} />
               {x.key === 'workout' && s.activeWorkout() && (
                 <View accessibilityLabel="Workout in progress" style={[styles.badge, { backgroundColor: t.success, borderColor: t.surface }]} />
               )}
@@ -204,7 +212,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
 }
 
 const styles = StyleSheet.create({
-  back: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 8 },
+  back: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2 },
   badge: { position: 'absolute', top: 0, right: -4, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },

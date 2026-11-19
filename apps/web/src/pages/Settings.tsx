@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fromKg, toKg } from '@open-workouts/shared';
 import { api, loadAuth, usePrefs, useStore, type Prefs } from '../state';
+import { useDialog } from '../dialog';
 
 interface SessionInfo {
   id: string;
@@ -12,6 +13,7 @@ interface SessionInfo {
 
 export function SettingsPage({ onLogout }: { onLogout: () => void }) {
   const store = useStore();
+  const dialog = useDialog();
   const prefs = usePrefs();
   const setPref = (patch: Partial<Prefs>) => store.setSetting('prefs', { ...prefs, ...patch });
   const [importUnit, setImportUnit] = useState<'kg' | 'lb'>(prefs.weightUnit);
@@ -147,7 +149,12 @@ export function SettingsPage({ onLogout }: { onLogout: () => void }) {
         </ul>
         <button
           onClick={async () => {
-            const name = prompt('Token name (e.g. "backup script")');
+            const name = await dialog.prompt({
+              title: 'Create API token',
+              message: 'For scripts and AI assistants (MCP). The token is shown once.',
+              placeholder: 'Name, e.g. backup script',
+              confirmText: 'Create',
+            });
             if (!name) return;
             const r = await api<{ token: string }>('/api/v1/tokens', { method: 'POST', body: JSON.stringify({ name }) });
             setNewToken(r.token);

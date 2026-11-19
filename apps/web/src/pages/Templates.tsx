@@ -1,17 +1,21 @@
 import { useState } from 'react';
-import type { Template } from '@open-workouts/shared';
-import { useStore } from '../state';
-import { ExercisePicker, Modal } from '../ui';
+import { formatDuration, type Template, type TemplateSet } from '@open-workouts/shared';
+import { navigate } from '../router';
+import { usePrefs, useStore } from '../state';
+import { ExercisePicker, Modal, formatDate, showWeight } from '../ui';
+import { useDialog } from '../dialog';
 
 export function Templates() {
   const store = useStore();
+  const dialog = useDialog();
   const [editing, setEditing] = useState<Template | null>(null);
+  const [previewing, setPreviewing] = useState<string | null>(null);
   const folders = store.all('templateFolders').sort((a, b) => a.position - b.position);
   const templates = store.all('templates').sort((a, b) => a.position - b.position);
   const groups: { id: string | null; name: string }[] = [{ id: null, name: 'My Templates' }, ...folders];
 
-  function newTemplate(folderId: string | null) {
-    const name = prompt('Template name');
+  async function newTemplate(folderId: string | null) {
+    const name = await dialog.prompt({ title: 'New template', placeholder: 'Template name, e.g. Push Day', confirmText: 'Create' });
     if (!name) return;
     setEditing(store.insert('templates', { name, folderId, notes: null, position: templates.length }));
   }
@@ -23,8 +27,8 @@ export function Templates() {
         <div className="row">
           <button
             className="ghost small"
-            onClick={() => {
-              const name = prompt('Folder name');
+            onClick={async () => {
+              const name = await dialog.prompt({ title: 'New folder', placeholder: 'Folder name', confirmText: 'Create' });
               if (name) store.insert('templateFolders', { name, position: folders.length });
             }}
           >
@@ -50,8 +54,14 @@ export function Templates() {
                   </button>
                   <button
                     className="ghost small danger"
-                    onClick={() => {
-                      if (!confirm(`Delete folder "${g.name}"? Templates move to My Templates.`)) return;
+                    onClick={async () => {
+                      const ok = await dialog.confirm({
+                        title: `Delete folder "${g.name}"?`,
+                        message: 'Its templates move to My Templates.',
+                        confirmText: 'Delete folder',
+                        destructive: true,
+                      });
+                      if (!ok) return;
                       for (const t of list) store.update('templates', t.id, { folderId: null });
                       store.remove('templateFolders', g.id!);
                     }}
@@ -65,10 +75,28 @@ export function Templates() {
               {list.map((t) => {
                 const tes = store.all('templateExercises').filter((x) => x.templateId === t.id).sort((a, b) => a.position - b.position);
                 return (
-                  <div key={t.id} className="card template-card">
+                  <div
+                    key={t.id}
+                    className="card template-card"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${t.name}: show template`}
+                    onClick={() => setPreviewing(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+                      e.preventDefault();
+                      setPreviewing(t.id);
+                    }}
+                  >
                     <div className="section-head">
                       <strong>{t.name}</strong>
-                      <button className="ghost small" onClick={() => setEditing(t)}>
+                      <button
+                        className="ghost small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing(t);
+                        }}
+                      >
                         Edit
                       </button>
                     </div>
@@ -83,9 +111,6 @@ export function Templates() {
                       })}
                       {tes.length > 6 && <li>+{tes.length - 6} more</li>}
                     </ul>
-                    <button className="primary block" onClick={() => store.startWorkout({ templateId: t.id })} disabled={!!store.activeWorkout()}>
-                      Start
-                    </button>
                   </div>
                 );
               })}
@@ -93,13 +118,109 @@ export function Templates() {
           </div>
         );
       })}
+      {previewing && (
+        <TemplatePreview
+          id={previewing}
+          onClose={() => setPreviewing(null)}
+          onEdit={() => {
+            const t = store.get('templates', previewing);
+            setPreviewing(null);
+            if (t) setEditing(t);
+          }}
+        />
+      )}
       {editing && <TemplateEditor template={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
+const KIND_LABEL = { normal: '', warmup: 'W', drop: 'D', failure: 'F' } as const;
+
+/** The whole template at a glance; the workout is started from here, not straight from the card. */
+function TemplatePreview({ id, onClose, onEdit }: { id: string; onClose: () => void; onEdit: () => void }) {
+  const store = useStore();
+  const prefs = usePrefs();
+  const t = store.get('templates', id);
+  if (!t) return null;
+  const tes = store
+    .all('templateExercises')
+    .filter((x) => x.templateId === id)
+    .sort((a, b) => a.position - b.position);
+  const setsOf = (teId: string) =>
+    store
+      .all('templateSets')
+      .filter((s) => s.templateExerciseId === teId)
+      .sort((a, b) => a.position - b.position);
+  const total = tes.reduce((n, te) => n + setsOf(te.id).length, 0);
+  const last = store
+    .all('workouts')
+    .filter((w) => w.templateId === id && w.endedAt != null)
+    .sort((a, b) => b.startedAt - a.startedAt)[0];
+  const active = store.activeWorkout();
+  const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
+  const describe = (s: TemplateSet) => {
+    const parts: string[] = [];
+    if (s.weight != null) parts.push(`${showWeight(s.weight, prefs)} ${prefs.weightUnit}`);
+    if (s.reps != null) parts.push(s.weight != null ? String(s.reps) : `${s.reps} reps`);
+    let out = parts.join(' × ');
+    if (s.distance != null) out += `${out ? ' · ' : ''}${+(s.distance / dist).toFixed(2)} ${prefs.distanceUnit}`;
+    if (s.duration != null) out += `${out ? ' · ' : ''}${formatDuration(s.duration)}`;
+    return out || '—';
+  };
+  return (
+    <Modal title={t.name} onClose={onClose}>
+      <p className="muted">
+        {[
+          `${tes.length} exercise${tes.length === 1 ? '' : 's'}`,
+          `${total} set${total === 1 ? '' : 's'}`,
+          last ? `last done ${formatDate(last.startedAt)}` : 'not done yet',
+        ].join(' · ')}
+      </p>
+      {t.notes && <p className="notes">{t.notes}</p>}
+      {tes.length === 0 && <p className="muted">No exercises yet. Use Edit to add some.</p>}
+      {tes.map((te) => {
+        let n = 0;
+        return (
+          <div key={te.id} className="tpl-ex">
+            <div className="section-head">
+              <strong>{store.get('exercises', te.exerciseId)?.name ?? 'Unknown'}</strong>
+              {te.restSeconds ? <span className="muted small">Rest {formatDuration(te.restSeconds)}</span> : null}
+            </div>
+            {te.notes && <div className="muted small">{te.notes}</div>}
+            <ul className="tpl-sets">
+              {setsOf(te.id).map((s) => (
+                <li key={s.id}>
+                  <span className={`kind-label kind-${s.kind}`}>{KIND_LABEL[s.kind] || ++n}</span>
+                  <span>{describe(s)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      {active && <p className="muted small">Finish or cancel your current workout before starting another.</p>}
+      <div className="dialog-actions">
+        <button onClick={onEdit}>Edit</button>
+        <button
+          className="primary"
+          disabled={!!active}
+          autoFocus
+          onClick={() => {
+            store.startWorkout({ templateId: id });
+            onClose();
+            navigate('workout');
+          }}
+        >
+          Start workout
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function TemplateEditor({ template, onClose }: { template: Template; onClose: () => void }) {
   const store = useStore();
+  const dialog = useDialog();
   const t = store.get('templates', template.id);
   const [picking, setPicking] = useState(false);
   if (!t) return null;
@@ -176,11 +297,17 @@ function TemplateEditor({ template, onClose }: { template: Template; onClose: ()
       </button>
       <button
         className="danger ghost block"
-        onClick={() => {
-          if (confirm(`Delete template "${t.name}"?`)) {
-            store.deleteTemplate(t.id);
-            onClose();
-          }
+        onClick={async () => {
+          const ok = await dialog.confirm({
+            title: `Delete template "${t.name}"?`,
+            message: 'Past workouts started from it are kept.',
+            confirmText: 'Delete',
+            destructive: true,
+          });
+          if (!ok) return;
+          store.deleteTemplate(t.id);
+          onClose();
+          dialog.toast('Template deleted');
         }}
       >
         Delete template

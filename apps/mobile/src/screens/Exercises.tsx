@@ -16,6 +16,7 @@ import {
 import { useNav } from '../nav';
 import { usePrefs, useStore } from '../state';
 import { Button, Card, Chips, H2, Input, Screen, Sheet, T, formatDate, label, showWeight, styles, useTheme } from '../ui';
+import { useDialog } from '../dialog';
 
 export function ExercisesScreen() {
   const store = useStore();
@@ -23,14 +24,17 @@ export function ExercisesScreen() {
   const t = useTheme();
   const [q, setQ] = useState('');
   const [part, setPart] = useState('all');
+  const dialog = useDialog();
   const [creating, setCreating] = useState(false);
   const list = store
     .exercises()
     .filter((e) => (part === 'all' || e.bodyPart === part) && e.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, padding: 16 }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
+      {/* Same width cap and header style as the other tabs (see Screen in ui.tsx). */}
+      <View style={[styles.sheetBody, { paddingHorizontal: 16, paddingTop: 16 }]}>
       <View style={styles.rowBetween}>
-        <T bold style={{ fontSize: 28 }}>
+        <T bold style={styles.h1}>
           Exercises
         </T>
         <Button small variant="primary" title="+ New" onPress={() => setCreating(true)} />
@@ -40,6 +44,14 @@ export function ExercisesScreen() {
       <FlatList
         data={list}
         keyExtractor={(e) => e.id}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: 24 }}
+        ListEmptyComponent={
+          <T muted style={{ marginTop: 16 }}>
+            No exercises match. Tap + New to create one.
+          </T>
+        }
         renderItem={({ item }) => (
           <Pressable
             onPress={() => nav.push({ name: 'exerciseDetail', id: item.id })}
@@ -53,12 +65,20 @@ export function ExercisesScreen() {
           </Pressable>
         )}
       />
-      {creating && <NewExercise onClose={() => setCreating(false)} />}
+      </View>
+      {creating && (
+        <NewExercise
+          onClose={(name) => {
+            setCreating(false);
+            if (name) dialog.toast(`Created "${name}"`);
+          }}
+        />
+      )}
     </View>
   );
 }
 
-function NewExercise({ onClose }: { onClose: () => void }) {
+function NewExercise({ onClose }: { onClose: (created?: string) => void }) {
   const store = useStore();
   const t = useTheme();
   const [name, setName] = useState('');
@@ -66,7 +86,7 @@ function NewExercise({ onClose }: { onClose: () => void }) {
   const [equipment, setEquipment] = useState<Equipment>('barbell');
   const [bodyPart, setBodyPart] = useState<BodyPart>('chest');
   return (
-    <Sheet onClose={onClose}>
+    <Sheet onClose={() => onClose()}>
       <Screen title="New exercise">
         <View style={{ backgroundColor: t.bg }}>
           <Input value={name} onChangeText={setName} placeholder="Name, e.g. Landmine Press (Barbell)" autoFocus />
@@ -85,7 +105,7 @@ function NewExercise({ onClose }: { onClose: () => void }) {
               onClose();
             }}
           />
-          <Button title="Cancel" variant="ghost" onPress={onClose} />
+          <Button title="Cancel" variant="ghost" onPress={() => onClose()} />
         </View>
       </Screen>
     </Sheet>
@@ -129,7 +149,10 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
         <Card>
           {weighted ? (
             <>
-              <Row k="Estimated 1RM" v={w(rec.estimated1RM?.value)} />
+              <Row
+                k="Estimated 1RM"
+                v={rec.estimated1RM ? `${+fromKg(rec.estimated1RM.value, prefs.weightUnit).toFixed(1)} ${prefs.weightUnit}` : '—'}
+              />
               <Row k="Max weight" v={w(rec.maxWeight?.value)} />
               <Row k="Max volume (set)" v={w(rec.maxSetVolume?.value)} />
               <Row k="Max volume (session)" v={w(rec.maxSessionVolume?.value)} />

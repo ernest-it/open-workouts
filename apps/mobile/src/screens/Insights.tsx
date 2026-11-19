@@ -102,8 +102,8 @@ export function InsightsScreen({ account }: { account: Account }) {
 
   if (!account.server) {
     return (
-      <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={{ padding: 16 }}>
-        <T bold style={{ fontSize: 28 }}>
+      <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={styles.screen}>
+        <T bold style={styles.h1}>
           Insights
         </T>
         <T muted>AI insights run on your server. Connect a server in Settings to use them.</T>
@@ -114,11 +114,11 @@ export function InsightsScreen({ account }: { account: Account }) {
   return (
     <ScrollView
       style={{ backgroundColor: t.bg }}
-      contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+      contentContainerStyle={styles.screen}
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={false} onRefresh={() => void load()} />}
     >
-      <T bold style={{ fontSize: 28, marginVertical: 8 }}>
+      <T bold style={styles.h1}>
         Insights
       </T>
       {enabled === false && (

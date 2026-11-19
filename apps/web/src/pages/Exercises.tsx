@@ -16,6 +16,7 @@ import {
 import { navigate } from '../router';
 import { usePrefs, useStore } from '../state';
 import { LineChart, Modal, formatDate, label, showWeight } from '../ui';
+import { useDialog } from '../dialog';
 
 export function ExercisesPage({ id }: { id?: string }) {
   if (id) return <ExerciseDetail id={id} />;
@@ -138,6 +139,7 @@ function ExerciseForm({ onClose, id }: { onClose: () => void; id?: string }) {
 
 function ExerciseDetail({ id }: { id: string }) {
   const store = useStore();
+  const dialog = useDialog();
   const prefs = usePrefs();
   const [tab, setTab] = useState<'records' | 'history' | 'charts' | 'about'>('records');
   const [editing, setEditing] = useState(false);
@@ -164,11 +166,17 @@ function ExerciseDetail({ id }: { id: string }) {
             <button onClick={() => setEditing(true)}>Edit</button>
             <button
               className="danger"
-              onClick={() => {
-                if (confirm('Delete this exercise? Past workouts keep their sets but show "Unknown".')) {
-                  store.remove('exercises', ex.id);
-                  navigate('exercises');
-                }
+              onClick={async () => {
+                const ok = await dialog.confirm({
+                  title: `Delete "${ex.name}"?`,
+                  message: 'Past workouts keep their sets, but the exercise shows as "Unknown".',
+                  confirmText: 'Delete',
+                  destructive: true,
+                });
+                if (!ok) return;
+                navigate('exercises');
+                store.remove('exercises', ex.id);
+                dialog.toast('Exercise deleted');
               }}
             >
               Delete

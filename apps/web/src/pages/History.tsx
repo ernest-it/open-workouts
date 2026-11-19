@@ -3,6 +3,7 @@ import { formatDuration, workoutPRs, workoutSummary, isWorkingSet } from '@open-
 import { navigate } from '../router';
 import { api, usePrefs, useStore } from '../state';
 import { Modal, formatDate, showWeight } from '../ui';
+import { useDialog } from '../dialog';
 import { Markdown } from '../markdown';
 import { ActiveWorkout } from './Workout';
 
@@ -103,6 +104,7 @@ function WorkoutCard({ id, unit }: { id: string; unit: string }) {
 
 function WorkoutDetail({ id }: { id: string }) {
   const store = useStore();
+  const dialog = useDialog();
   const prefs = usePrefs();
   const [editing, setEditing] = useState(false);
   const [comparison, setComparison] = useState<{ title: string; content: string } | null>(null);
@@ -153,20 +155,33 @@ function WorkoutDetail({ id }: { id: string }) {
             {comparing ? 'Comparing…' : '✨ Compare with previous'}
           </button>
           <button
-            onClick={() => {
-              const t = store.saveWorkoutAsTemplate(id, prompt('Template name', w.name) ?? w.name);
-              alert(`Saved template "${t.name}"`);
+            onClick={async () => {
+              const name = await dialog.prompt({
+                title: 'Save as template',
+                message: "Reuse this workout's exercises and sets from the Workout page.",
+                defaultValue: w.name,
+                placeholder: 'Template name',
+              });
+              if (!name) return;
+              store.saveWorkoutAsTemplate(id, name);
+              dialog.toast(`Saved template "${name}"`, { text: 'View', onClick: () => navigate('workout') });
             }}
           >
             Save as template
           </button>
           <button
             className="danger"
-            onClick={() => {
-              if (confirm('Delete this workout?')) {
-                store.deleteWorkout(id);
-                navigate('history');
-              }
+            onClick={async () => {
+              const ok = await dialog.confirm({
+                title: 'Delete workout?',
+                message: `"${w.name}" and its sets are removed from your history and records.`,
+                confirmText: 'Delete',
+                destructive: true,
+              });
+              if (!ok) return;
+              navigate('history');
+              store.deleteWorkout(id);
+              dialog.toast('Workout deleted');
             }}
           >
             Delete

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { formatDuration, isWorkingSet, workoutPRs, workoutSummary } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore } from '../state';
 import { Button, Card, Screen, T, formatDate, showWeight, styles, useTheme } from '../ui';
 import { ActiveWorkout } from './Workout';
+import { useDialog } from '../dialog';
 
 export function HistoryScreen() {
   const store = useStore();
@@ -17,7 +18,15 @@ export function HistoryScreen() {
     .sort((a, b) => b.startedAt - a.startedAt);
   return (
     <Screen title="History">
-      {workouts.length === 0 && <T muted>No workouts yet.</T>}
+      {workouts.length === 0 && (
+        <Card>
+          <T bold>No workouts yet</T>
+          <T small muted>
+            Finished workouts show up here with their sets, volume and PRs.
+          </T>
+          <Button title="Start a workout" variant="primary" onPress={() => nav.switchTab('workout')} style={{ marginTop: 8 }} />
+        </Card>
+      )}
       {workouts.slice(0, limit).map((w) => {
         const sum = workoutSummary(store.dataset, w.id);
         return (
@@ -50,6 +59,7 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
   const prefs = usePrefs();
   const nav = useNav();
   const t = useTheme();
+  const dialog = useDialog();
   const [editing, setEditing] = useState(false);
   const w = store.get('workouts', id);
   const prs = useMemo(() => new Map(workoutPRs(store.dataset, id).map((p) => [p.setId, p.types])), [store.dataset, id]);
@@ -107,27 +117,33 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       })}
       <Button
         title="Save as template"
-        onPress={() => {
-          const tpl = store.saveWorkoutAsTemplate(id);
-          Alert.alert('Template saved', `"${tpl.name}" is now on the Workout tab.`);
+        onPress={async () => {
+          const name = await dialog.prompt({
+            title: 'Save as template',
+            message: "Reuse this workout's exercises and sets from the Workout tab.",
+            defaultValue: w.name,
+            placeholder: 'Template name',
+          });
+          if (!name) return;
+          store.saveWorkoutAsTemplate(id, name);
+          dialog.toast(`Saved template "${name}"`, { text: 'View', onPress: () => nav.switchTab('workout') });
         }}
       />
       <Button
         title="Delete workout"
         variant="danger"
-        onPress={() =>
-          Alert.alert('Delete workout?', undefined, [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Delete',
-              style: 'destructive',
-              onPress: () => {
-                store.deleteWorkout(id);
-                nav.pop();
-              },
-            },
-          ])
-        }
+        onPress={async () => {
+          const ok = await dialog.confirm({
+            title: 'Delete workout?',
+            message: `"${w.name}" and its sets are removed from your history and records.`,
+            confirmText: 'Delete',
+            destructive: true,
+          });
+          if (!ok) return;
+          nav.pop();
+          store.deleteWorkout(id);
+          dialog.toast('Workout deleted');
+        }}
       />
     </Screen>
   );

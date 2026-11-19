@@ -15,6 +15,7 @@ import {
 import { navigate } from '../router';
 import { usePrefs, useStore, type Prefs } from '../state';
 import { ExercisePicker, Modal, showWeight, weightLabel } from '../ui';
+import { useDialog } from '../dialog';
 import { Templates } from './Templates';
 
 export function WorkoutPage() {
@@ -47,6 +48,7 @@ export function ActiveWorkout({ workout, editing = false }: { workout: Workout; 
   const store = useStore();
   const prefs = usePrefs();
   const now = useNow();
+  const dialog = useDialog();
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState<{ until: number; total: number } | null>(null);
   const wexs = store.workoutExercises(workout.id);
@@ -67,15 +69,44 @@ export function ActiveWorkout({ workout, editing = false }: { workout: Workout; 
     if (seconds > 0) setRest({ until: Date.now() + seconds * 1000, total: seconds });
   };
 
-  function finish() {
-    const incomplete = store.all('sets').filter((s) => s.workoutId === workout.id && !s.completed).length;
-    if (incomplete && !confirm(`${incomplete} set(s) are not completed and will be discarded. Finish anyway?`)) return;
+  async function finish() {
+    const sets = store.all('sets').filter((s) => s.workoutId === workout.id);
+    const done = sets.filter((s) => s.completed).length;
+    if (!done) {
+      const discard = await dialog.confirm({
+        title: 'Nothing logged yet',
+        message: 'Tick ✓ next to each set you finish. A workout with no completed sets is not saved.',
+        cancelText: 'Keep logging',
+        confirmText: 'Discard workout',
+        destructive: true,
+      });
+      if (discard) store.deleteWorkout(workout.id);
+      return;
+    }
+    const incomplete = sets.length - done;
+    if (
+      incomplete &&
+      !(await dialog.confirm({
+        title: 'Finish workout?',
+        message: `${incomplete} unticked set${incomplete === 1 ? '' : 's'} will be left out.`,
+        cancelText: 'Keep logging',
+        confirmText: 'Finish',
+      }))
+    )
+      return;
     store.finishWorkout(workout.id);
     navigate(`history/${workout.id}`);
   }
 
-  function cancel() {
-    if (confirm('Discard this workout? This cannot be undone.')) store.deleteWorkout(workout.id);
+  async function cancel() {
+    const ok = await dialog.confirm({
+      title: 'Discard workout?',
+      message: 'Everything logged in this workout is deleted. This cannot be undone.',
+      cancelText: 'Keep',
+      confirmText: 'Discard',
+      destructive: true,
+    });
+    if (ok) store.deleteWorkout(workout.id);
   }
 
   return (
@@ -156,6 +187,7 @@ function ExerciseBlock({
   editing: boolean;
 }) {
   const store = useStore();
+  const dialog = useDialog();
   const ex = store.get('exercises', we.exerciseId);
   const sets = store.setsOf(we.id);
   const prev = useMemo(
@@ -188,7 +220,7 @@ function ExerciseBlock({
           {ex.name}
         </button>
         <div className="row">
-          {lt === 'weight_reps' && (
+          {lt === 'weight_reps' && (ex.equipment === 'barbell' || ex.equipment === 'smith_machine') && (
             <>
               <button className="ghost small" onClick={() => setTool('warmup')} title="Warm-up calculator">
                 Warm-up
@@ -200,7 +232,20 @@ function ExerciseBlock({
           )}
           <button
             className="ghost small danger"
-            onClick={() => confirm(`Remove ${ex.name}?`) && store.removeWorkoutExercise(we.id)}
+            onClick={async () => {
+              const logged = store.setsOf(we.id).filter((s) => s.completed).length;
+              if (
+                logged &&
+                !(await dialog.confirm({
+                  title: `Remove ${ex.name}?`,
+                  message: `${logged} completed set${logged === 1 ? '' : 's'} will be deleted.`,
+                  confirmText: 'Remove',
+                  destructive: true,
+                }))
+              )
+                return;
+              store.removeWorkoutExercise(we.id);
+            }}
             title="Remove exercise"
           >
             ✕
@@ -222,7 +267,7 @@ function ExerciseBlock({
             {showDistance && <th>{prefs.distanceUnit}</th>}
             {showDuration && <th>Time</th>}
             {showReps && <th>Reps</th>}
-            <th>RPE</th>
+            <th className="rpe-col">RPE</th>
             <th aria-label="Completed">✓</th>
           </tr>
         </thead>
@@ -284,6 +329,7 @@ function SetRow({
   editing: boolean;
 }) {
   const store = useStore();
+  const dialog = useDialog();
   const up = (patch: Partial<WorkoutSet>) => store.update('sets', s.id, patch);
   const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));
   const distFactor = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
@@ -295,7 +341,10 @@ function SetRow({
           onClick={() => up({ kind: NEXT_KIND[s.kind] })}
           onContextMenu={(e) => {
             e.preventDefault();
-            if (confirm('Delete set?')) store.remove('sets', s.id);
+            // Delete straight away; Undo puts it back.
+            const { id: _id, createdAt: _c, updatedAt: _u, deletedAt: _d, ...copy } = s;
+            store.remove('sets', s.id);
+            dialog.toast('Set deleted', { text: 'Undo', onClick: () => store.insert('sets', copy) });
           }}
           title="Click: change set type · Right-click: delete"
         >

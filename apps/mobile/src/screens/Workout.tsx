@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import {
   calculatePlates,
@@ -16,7 +17,8 @@ import {
 } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore, type Prefs } from '../state';
-import { Button, Card, Chips, H2, Input, NumInput, Screen, Sheet, T, label, showWeight, styles, useTheme } from '../ui';
+import { Button, Card, Chips, H2, Input, NumInput, Screen, Sheet, T, label, relativeDay, showWeight, styles, useTheme } from '../ui';
+import { useDialog } from '../dialog';
 
 export function WorkoutScreen() {
   const store = useStore();
@@ -27,6 +29,8 @@ export function WorkoutScreen() {
 
 function StartScreen() {
   const store = useStore();
+  const nav = useNav();
+  const theme = useTheme();
   const templates = store.all('templates').sort((a, b) => a.position - b.position);
   const folders = store.all('templateFolders').sort((a, b) => a.position - b.position);
   const groups = [{ id: null as string | null, name: 'My Templates' }, ...folders];
@@ -42,13 +46,24 @@ function StartScreen() {
             {list.map((t) => {
               const tes = store.all('templateExercises').filter((x) => x.templateId === t.id).sort((a, b) => a.position - b.position);
               return (
-                <Card key={t.id} onPress={() => store.startWorkout({ templateId: t.id })}>
-                  <T bold>{t.name}</T>
+                // Opens a preview of the whole template; the workout starts from there.
+                <Card key={t.id} onPress={() => nav.push({ name: 'templateDetail', id: t.id })}>
+                  <View style={styles.rowBetween}>
+                    <T bold style={{ flex: 1 }}>
+                      {t.name}
+                    </T>
+                    <Ionicons name="chevron-forward" size={18} color={theme.muted} />
+                  </View>
                   {tes.slice(0, 5).map((te) => (
-                    <T key={te.id} small muted>
+                    <T key={te.id} small muted lines={1}>
                       {store.all('templateSets').filter((s) => s.templateExerciseId === te.id).length} × {store.get('exercises', te.exerciseId)?.name}
                     </T>
                   ))}
+                  {tes.length > 5 && (
+                    <T small muted>
+                      +{tes.length - 5} more
+                    </T>
+                  )}
                 </Card>
               );
             })}
@@ -61,6 +76,139 @@ function StartScreen() {
         </T>
       )}
     </Screen>
+  );
+}
+
+/** Full preview of a template: every exercise and set. Starting a workout happens from here. */
+export function TemplateDetailScreen({ id }: { id: string }) {
+  const store = useStore();
+  const prefs = usePrefs();
+  const nav = useNav();
+  const dialog = useDialog();
+  const t = useTheme();
+  const tpl = store.get('templates', id);
+  if (!tpl)
+    return (
+      <Screen>
+        <T>Template not found.</T>
+      </Screen>
+    );
+  const tes = store
+    .all('templateExercises')
+    .filter((x) => x.templateId === id)
+    .sort((a, b) => a.position - b.position);
+  const setsOf = (teId: string) =>
+    store
+      .all('templateSets')
+      .filter((s) => s.templateExerciseId === teId)
+      .sort((a, b) => a.position - b.position);
+  const totalSets = tes.reduce((n, te) => n + setsOf(te.id).length, 0);
+  const folder = tpl.folderId ? store.get('templateFolders', tpl.folderId)?.name : null;
+  const last = store
+    .all('workouts')
+    .filter((w) => w.templateId === id && w.endedAt != null)
+    .sort((a, b) => b.startedAt - a.startedAt)[0];
+  const active = store.activeWorkout();
+  const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
+  const describe = (s: { weight: number | null; reps: number | null; distance: number | null; duration: number | null }) => {
+    const parts: string[] = [];
+    if (s.weight != null) parts.push(`${showWeight(s.weight, prefs)} ${prefs.weightUnit}`);
+    if (s.reps != null) parts.push(s.weight != null ? String(s.reps) : `${s.reps} reps`);
+    let out = parts.join(' × ');
+    if (s.distance != null) out += `${out ? ' · ' : ''}${+(s.distance / dist).toFixed(2)} ${prefs.distanceUnit}`;
+    if (s.duration != null) out += `${out ? ' · ' : ''}${formatDuration(s.duration)}`;
+    return out || '—';
+  };
+
+  const start = () => {
+    store.startWorkout({ templateId: id });
+    nav.pop(); // back to the Workout tab, which now shows the running workout
+  };
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Screen title={tpl.name}>
+        <T muted>
+          {[
+            folder,
+            `${tes.length} exercise${tes.length === 1 ? '' : 's'}`,
+            `${totalSets} set${totalSets === 1 ? '' : 's'}`,
+            last ? `last done ${relativeDay(last.startedAt)}` : 'not done yet',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </T>
+        {tpl.notes ? <T style={{ marginTop: 8 }}>{tpl.notes}</T> : null}
+        {tes.length === 0 && <T muted style={{ marginTop: 12 }}>This template has no exercises yet. Add them in the web UI.</T>}
+        {tes.map((te) => {
+          const ex = store.get('exercises', te.exerciseId);
+          let n = 0;
+          return (
+            <Card key={te.id} onPress={ex ? () => nav.push({ name: 'exerciseDetail', id: ex.id }) : undefined}>
+              <View style={styles.rowBetween}>
+                <T bold style={{ flex: 1 }}>
+                  {ex?.name ?? 'Unknown exercise'}
+                </T>
+                {te.restSeconds ? (
+                  <T small muted>
+                    Rest {formatDuration(te.restSeconds)}
+                  </T>
+                ) : null}
+              </View>
+              {te.notes ? (
+                <T small muted>
+                  {te.notes}
+                </T>
+              ) : null}
+              {setsOf(te.id).map((s) => (
+                <View key={s.id} style={[styles.row, { paddingVertical: 2 }]}>
+                  <T bold style={{ width: 24, color: { normal: t.text, warmup: t.warn, drop: t.accent, failure: t.danger }[s.kind] }}>
+                    {KIND_LABEL[s.kind] || ++n}
+                  </T>
+                  <T>{describe(s)}</T>
+                </View>
+              ))}
+            </Card>
+          );
+        })}
+        <View style={[styles.row, { marginTop: 8 }]}>
+          <Button
+            title="Rename"
+            variant="ghost"
+            onPress={async () => {
+              const name = await dialog.prompt({ title: 'Rename template', defaultValue: tpl.name, placeholder: 'Template name' });
+              if (name) store.update('templates', id, { name });
+            }}
+          />
+          <Button
+            title="Delete template"
+            variant="danger"
+            onPress={async () => {
+              const ok = await dialog.confirm({
+                title: `Delete "${tpl.name}"?`,
+                message: 'Past workouts started from it are kept.',
+                confirmText: 'Delete',
+                destructive: true,
+              });
+              if (!ok) return;
+              store.deleteTemplate(id);
+              nav.pop();
+              dialog.toast('Template deleted');
+            }}
+          />
+        </View>
+      </Screen>
+      <View style={[local.startBar, { backgroundColor: t.surface, borderColor: t.border }]}>
+        <View style={{ width: '100%', maxWidth: 720, alignSelf: 'center' }}>
+        {active && (
+          <T small muted style={{ textAlign: 'center', marginBottom: 4 }}>
+            Finish or cancel your current workout first.
+          </T>
+        )}
+        <Button title="Start workout" variant="primary" disabled={!!active} onPress={start} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -79,6 +227,7 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
   const prefs = usePrefs();
   const nav = useNav();
   const t = useTheme();
+  const dialog = useDialog();
   const now = useNow();
   const [picking, setPicking] = useState(false);
   const [rest, setRest] = useState<{ until: number; total: number } | null>(null);
@@ -92,18 +241,35 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
     }
   }, [now, rest]);
 
-  const finish = () => {
-    const incomplete = store.all('sets').filter((s) => s.workoutId === workout.id && !s.completed).length;
-    const doIt = () => {
-      store.finishWorkout(workout.id);
-      nav.switchTab('history');
-      nav.push({ name: 'workoutDetail', id: workout.id });
-    };
-    if (!incomplete) return doIt();
-    Alert.alert('Finish workout?', `${incomplete} incomplete set(s) will be discarded.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Finish', onPress: doIt },
-    ]);
+  const finish = async () => {
+    const sets = store.all('sets').filter((s) => s.workoutId === workout.id);
+    const done = sets.filter((s) => s.completed).length;
+    if (!done) {
+      // Finishing would save an empty workout: offer to keep going or throw it away instead.
+      const discard = await dialog.confirm({
+        title: 'Nothing logged yet',
+        message: 'Tap ✓ next to each set you finish. A workout with no completed sets is not saved.',
+        cancelText: 'Keep logging',
+        confirmText: 'Discard',
+        destructive: true,
+      });
+      if (discard) store.deleteWorkout(workout.id);
+      return;
+    }
+    const incomplete = sets.length - done;
+    if (
+      incomplete &&
+      !(await dialog.confirm({
+        title: 'Finish workout?',
+        message: `${incomplete} unticked set${incomplete === 1 ? '' : 's'} will be left out.`,
+        cancelText: 'Keep logging',
+        confirmText: 'Finish',
+      }))
+    )
+      return;
+    store.finishWorkout(workout.id);
+    nav.switchTab('history');
+    nav.push({ name: 'workoutDetail', id: workout.id });
   };
 
   return (
@@ -152,12 +318,16 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
           <Button
             title="Cancel workout"
             variant="danger"
-            onPress={() =>
-              Alert.alert('Discard workout?', 'This cannot be undone.', [
-                { text: 'Keep', style: 'cancel' },
-                { text: 'Discard', style: 'destructive', onPress: () => store.deleteWorkout(workout.id) },
-              ])
-            }
+            onPress={async () => {
+              const ok = await dialog.confirm({
+                title: 'Discard workout?',
+                message: 'Everything logged in this workout is deleted. This cannot be undone.',
+                cancelText: 'Keep',
+                confirmText: 'Discard',
+                destructive: true,
+              });
+              if (ok) store.deleteWorkout(workout.id);
+            }}
           />
         )}
       </Screen>
@@ -187,7 +357,6 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
 }
 
 const KIND_LABEL: Record<SetKind, string> = { normal: '', warmup: 'W', drop: 'D', failure: 'F' };
-const NEXT_KIND: Record<SetKind, SetKind> = { normal: 'warmup', warmup: 'drop', drop: 'failure', failure: 'normal' };
 
 function ExerciseBlock({
   we,
@@ -205,6 +374,7 @@ function ExerciseBlock({
   const store = useStore();
   const nav = useNav();
   const t = useTheme();
+  const dialog = useDialog();
   const [plates, setPlates] = useState(false);
   const ex = store.get('exercises', we.exerciseId);
   const sets = store.setsOf(we.id);
@@ -228,18 +398,41 @@ function ExerciseBlock({
         <Pressable onPress={() => nav.push({ name: 'exerciseDetail', id: ex.id })} style={{ flex: 1 }}>
           <Text style={{ color: t.accent, fontWeight: '700', fontSize: 16 }}>{ex.name}</Text>
         </Pressable>
-        {lt === 'weight_reps' && <Button small variant="ghost" title="Plates" onPress={() => setPlates(true)} />}
-        <Button
-          small
-          variant="danger"
-          title="✕"
-          onPress={() =>
-            Alert.alert(`Remove ${ex.name}?`, undefined, [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove', style: 'destructive', onPress: () => store.removeWorkoutExercise(we.id) },
-            ])
-          }
-        />
+        {/* Plates only make sense for a loaded bar, not dumbbells, cables or machines. */}
+        {lt === 'weight_reps' && (ex.equipment === 'barbell' || ex.equipment === 'smith_machine') && (
+          <Button small variant="ghost" title="Plates" onPress={() => setPlates(true)} />
+        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`More options for ${ex.name}`}
+          hitSlop={10}
+          style={local.more}
+          onPress={async () => {
+            const choice = await dialog.menu({
+              title: ex.name,
+              options: [
+                { text: 'History & records', value: 'history' },
+                { text: 'Remove exercise', value: 'remove', destructive: true },
+              ],
+            });
+            if (choice === 'history') nav.push({ name: 'exerciseDetail', id: ex.id });
+            if (choice !== 'remove') return;
+            const logged = sets.filter((s) => s.completed).length;
+            if (
+              logged &&
+              !(await dialog.confirm({
+                title: `Remove ${ex.name}?`,
+                message: `${logged} completed set${logged === 1 ? '' : 's'} will be deleted.`,
+                confirmText: 'Remove',
+                destructive: true,
+              }))
+            )
+              return;
+            store.removeWorkoutExercise(we.id);
+          }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={20} color={t.muted} />
+        </Pressable>
       </View>
       <View style={[styles.row, local.headRow]}>
         <T small muted style={local.cSet} lines={1}>
@@ -324,20 +517,35 @@ function SetRow({
 }) {
   const store = useStore();
   const t = useTheme();
+  const dialog = useDialog();
   const up = (patch: Partial<WorkoutSet>) => store.update('sets', s.id, patch);
   const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
   const kindColor = { normal: t.text, warmup: t.warn, drop: t.accent, failure: t.danger }[s.kind];
+  // Tapping the set number opens a menu (set type, delete) instead of silently cycling the type.
+  const openMenu = async () => {
+    const mark = (k: SetKind, text: string) => ({ text: s.kind === k ? `✓ ${text}` : text, value: k });
+    const choice = await dialog.menu({
+      title: `Set ${setLabel}`,
+      options: [
+        mark('normal', 'Normal set'),
+        mark('warmup', 'Warm-up'),
+        mark('drop', 'Drop set'),
+        mark('failure', 'Failure'),
+        { text: 'Delete set', value: 'delete', destructive: true },
+      ],
+    });
+    if (choice === 'delete') store.remove('sets', s.id);
+    else if (choice) up({ kind: choice });
+  };
   return (
     <View style={[styles.row, local.setRow, s.completed && { backgroundColor: t.doneRow }]}>
       <Pressable
         style={local.cSet}
-        onPress={() => up({ kind: NEXT_KIND[s.kind] })}
-        onLongPress={() =>
-          Alert.alert('Delete set?', undefined, [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Delete', style: 'destructive', onPress: () => store.remove('sets', s.id) },
-          ])
-        }
+        onPress={openMenu}
+        onLongPress={openMenu}
+        accessibilityRole="button"
+        accessibilityLabel={`Set ${setLabel} options`}
+        hitSlop={6}
       >
         <Text style={{ color: kindColor, fontWeight: '700', textAlign: 'center' }}>{setLabel}</Text>
       </Pressable>
@@ -366,7 +574,7 @@ function SetRow({
           if (!s.completed && !editing) onCompleted();
         }}
       >
-        <Text style={{ color: s.completed ? '#fff' : t.muted, fontWeight: '800' }}>✓</Text>
+        <Ionicons name="checkmark" size={20} color={s.completed ? '#fff' : t.muted} />
       </Pressable>
     </View>
   );
@@ -473,5 +681,7 @@ const local = StyleSheet.create({
   restProgress: { position: 'absolute', left: 0, bottom: 0, height: 3 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
   sheet: { borderRadius: 14, padding: 16 },
+  more: { paddingHorizontal: 8, paddingVertical: 2, marginLeft: 2 },
+  startBar: { padding: 12, paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth },
   pickRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

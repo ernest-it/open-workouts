@@ -217,3 +217,65 @@ pre.code { background: var(--surface-2); padding: 0.75rem; border-radius: 8px; o
 .report-head { width: 100%; background: none; border: none; padding: 0; text-align: left; }
 .check-label { color: var(--text); flex-wrap: nowrap; }
 .check-label > input[type="checkbox"] { flex: none; min-width: 0; width: 1.1rem; height: 1.1rem; margin: 0; }
+
+/* in-app dialogs (replace window.confirm / prompt / alert) */
+.dialog-backdrop { z-index: 60; }
+.modal.dialog { max-width: 420px; padding: 1.25rem; }
+.dialog h2 { margin-top: 0; }
+.dialog-message { margin: 0.25rem 0 0.75rem; white-space: pre-line; }
+.dialog input { width: 100%; margin: 0.25rem 0 0.5rem; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+button.danger-fill { background: var(--danger); border-color: var(--danger); color: #fff; }
+.toast {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 70;
+  display: flex; gap: 1rem; align-items: center; max-width: calc(100vw - 32px);
+  background: var(--text); color: var(--bg); padding: 0.7rem 1rem; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25); animation: toast-in .18s ease-out;
+}
+.toast button.link { color: var(--bg); text-decoration: underline; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } }
+
+/* template preview */
+.template-card { cursor: pointer; }
+.template-card:hover { border-color: var(--accent); }
+.tpl-ex { padding: 0.6rem 0; border-top: 1px solid var(--border); }
+.tpl-ex:first-of-type { border-top: none; }
+.tpl-sets { margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.tpl-sets li { display: flex; gap: 0.75rem; }
+.tpl-sets .kind-label { width: 1.5rem; font-weight: 700; }
+
+/* Notches / camera cut-outs when the web UI is opened on a phone (index.html uses viewport-fit=cover). */
+.page {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+.toast { top: calc(16px + env(safe-area-inset-top)); }
+@media (max-width: 720px) {
+  .tabs-nav { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  .page { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+}
+
+/* Small phones (320–480px): fit the set table instead of widening the whole page. */
+.exercise-block { overflow-x: auto; }
+@media (max-width: 480px) {
+  .exercise-block { padding: 0.6rem 0.5rem; }
+  .exercise-head { flex-wrap: wrap; }
+  .exercise-head > .link { flex: 1 1 100%; }
+  table.sets th, table.sets td { padding: 0.15rem 0.1rem; }
+  table.sets td.prev { white-space: normal; font-size: 0.75rem; }
+  input.num { width: 3.3rem; padding: 0.35rem 0.1rem; }
+  table.sets select { width: 3.4rem; padding-left: 0.1rem; padding-right: 0; }
+  .kind { min-width: 1.8rem; padding: 0.3rem 0.2rem; }
+}
+
+/* Very narrow phones (≤380px, e.g. iPhone SE 1st gen / small Androids). */
+@media (max-width: 380px) {
+  /* RPE is optional: drop the column so the ✓ button always fits. */
+  table.sets th.rpe-col, table.sets td:has(> select.rpe) { display: none; }
+  /* Seven tabs share the width: tighter padding and smaller labels, never cut off. */
+  .tabs-nav a { flex: 1 1 0; min-width: 0; padding: 0.3rem 0.05rem; font-size: 0.6rem; }
+  .tabs-nav .tab-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.dialog-actions { flex-wrap: wrap; }
+.dialog-actions button { white-space: nowrap; }
