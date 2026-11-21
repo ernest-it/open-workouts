@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NavContext, type Nav, type Route, type Tab } from './src/nav';
 import { initStore, loadAccount, saveAccount, store, useStore, type Account } from './src/state';
-import { useTheme } from './src/ui';
+import { KeyboardFocusGuard, useTheme } from './src/ui';
 import { ConnectScreen } from './src/screens/Connect';
 import { TemplateDetailScreen, WorkoutScreen } from './src/screens/Workout';
 import { DialogProvider } from './src/dialog';
@@ -37,6 +37,7 @@ export default function App() {
     <SafeAreaProvider>
       <DialogProvider>
       <StatusBar style="auto" />
+      <KeyboardFocusGuard />
       {loadError ? (
         <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
       ) : account === undefined || (account && !ready) ? (

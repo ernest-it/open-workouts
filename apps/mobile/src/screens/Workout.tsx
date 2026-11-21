@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { FlatList, Keyboard, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
@@ -155,6 +155,14 @@ export function TemplateDetailScreen({ id }: { id: string }) {
                   </T>
                 ) : null}
               </View>
+              {ex && store.pinnedNote(ex.id) ? (
+                <View style={[styles.row, { gap: 6, alignItems: 'flex-start' }]}>
+                  <Ionicons name="pin" size={14} color={t.accent} style={{ marginTop: 2 }} />
+                  <T small style={{ flex: 1 }}>
+                    {store.pinnedNote(ex.id)}
+                  </T>
+                </View>
+              ) : null}
               {te.notes ? (
                 <T small muted>
                   {te.notes}
@@ -385,6 +393,29 @@ function ExerciseBlock({
   );
   if (!ex) return null;
   const lt = ex.logType;
+  const pinned = store.pinnedNote(ex.id);
+  const editNote = async () => {
+    const v = await dialog.prompt({
+      title: we.notes ? 'Edit note' : 'Add note',
+      message: 'For this workout only. It shows in the workout summary in History.',
+      defaultValue: we.notes ?? '',
+      placeholder: 'How did it feel?',
+      multiline: true,
+      allowEmpty: !!we.notes,
+    });
+    if (v != null) store.update('workoutExercises', we.id, { notes: v || null });
+  };
+  const editPinned = async () => {
+    const v = await dialog.prompt({
+      title: pinned ? 'Edit pinned note' : 'Pin a note',
+      message: `Shows on ${ex.name} every time you do it. Good for seat settings, grip or cues.`,
+      defaultValue: pinned ?? '',
+      placeholder: 'e.g. Seat on 4, pause at the bottom',
+      multiline: true,
+      allowEmpty: !!pinned,
+    });
+    if (v != null) store.setPinnedNote(ex.id, v || null);
+  };
   const hasWeight = lt === 'weight_reps' || lt === 'weighted_bodyweight' || lt === 'assisted_bodyweight';
   const hasReps = lt !== 'duration' && lt !== 'distance_duration';
   const hasDistance = lt === 'distance_duration';
@@ -411,10 +442,14 @@ function ExerciseBlock({
             const choice = await dialog.menu({
               title: ex.name,
               options: [
+                { text: we.notes ? 'Edit note' : 'Add note', value: 'note' },
+                { text: pinned ? 'Edit pinned note' : 'Pin a note', value: 'pin' },
                 { text: 'History & records', value: 'history' },
                 { text: 'Remove exercise', value: 'remove', destructive: true },
               ],
             });
+            if (choice === 'note') return void editNote();
+            if (choice === 'pin') return void editPinned();
             if (choice === 'history') nav.push({ name: 'exerciseDetail', id: ex.id });
             if (choice !== 'remove') return;
             const logged = sets.filter((s) => s.completed).length;
@@ -434,6 +469,27 @@ function ExerciseBlock({
           <Ionicons name="ellipsis-horizontal" size={20} color={t.muted} />
         </Pressable>
       </View>
+      {pinned && (
+        <Pressable
+          onPress={editPinned}
+          accessibilityRole="button"
+          accessibilityLabel={`Pinned note: ${pinned}. Tap to edit.`}
+          style={[local.note, { backgroundColor: t.surface2 }]}
+        >
+          <Ionicons name="pin" size={14} color={t.accent} style={local.noteIcon} />
+          <T small style={{ flex: 1 }}>
+            {pinned}
+          </T>
+        </Pressable>
+      )}
+      {we.notes ? (
+        <Pressable onPress={editNote} accessibilityRole="button" accessibilityLabel={`Note: ${we.notes}. Tap to edit.`} style={local.note}>
+          <Ionicons name="chatbox-ellipses-outline" size={14} color={t.muted} style={local.noteIcon} />
+          <T small muted style={{ flex: 1 }}>
+            {we.notes}
+          </T>
+        </Pressable>
+      ) : null}
       <View style={[styles.row, local.headRow]}>
         <T small muted style={local.cSet} lines={1}>
           SET
@@ -570,6 +626,7 @@ function SetRow({
         accessibilityLabel="Complete set"
         style={[local.cCheck, local.check, { backgroundColor: s.completed ? t.success : t.surface2 }]}
         onPress={() => {
+          if (!s.completed) Keyboard.dismiss(); // ticking a set means you are done typing it
           up({ completed: !s.completed });
           if (!s.completed && !editing) onCompleted();
         }}
@@ -682,6 +739,8 @@ const local = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
   sheet: { borderRadius: 14, padding: 16 },
   more: { paddingHorizontal: 8, paddingVertical: 2, marginLeft: 2 },
+  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 6 },
+  noteIcon: { marginTop: 2 },
   startBar: { padding: 12, paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth },
   pickRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

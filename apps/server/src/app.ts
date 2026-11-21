@@ -234,13 +234,14 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
           distanceUnit: req.query.distanceUnit === 'mi' ? 'mi' : 'km',
           timezoneOffsetMinutes: req.query.tzOffset != null ? Number(req.query.tzOffset) : 0,
           existingExercises: existing,
+          existingWorkouts: allRows(db, req.user!.id, 'workouts') as Workout[],
         });
         const { applied, rejected } = applyChanges(db, req.user!.id, result.changes);
         return { ...result.summary, applied, rejected: rejected.slice(0, 50) };
       },
     );
 
-    r.get<{ Querystring: { weightUnit?: string; distanceUnit?: string } }>('/api/v1/export/strong.csv', async (req, reply) => {
+    r.get<{ Querystring: { weightUnit?: string; distanceUnit?: string; tzOffset?: string } }>('/api/v1/export/strong.csv', async (req, reply) => {
       const uid = req.user!.id;
       const custom = new Map((allRows(db, uid, 'exercises') as Exercise[]).map((e) => [e.id, e.name]));
       const builtin = new Map(BUILTIN_EXERCISES.map((e) => [e.id, e.name]));
@@ -254,6 +255,8 @@ export function buildApp(config: Config, db: DB = openDatabase(config.databaseFi
         {
           weightUnit: req.query.weightUnit === 'lb' ? 'lb' : 'kg',
           distanceUnit: req.query.distanceUnit === 'mi' ? 'mi' : 'km',
+          // Times are written as the user's wall-clock time, not the server's.
+          timezoneOffsetMinutes: Number.isFinite(Number(req.query.tzOffset)) ? Number(req.query.tzOffset) : 0,
         },
       );
       return reply

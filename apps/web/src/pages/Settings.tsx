@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fromKg, toKg } from '@open-workouts/shared';
+import { fromKg, looksLikeBackup, parseBackup, toKg } from '@open-workouts/shared';
 import { api, loadAuth, usePrefs, useStore, type Prefs } from '../state';
 import { useDialog } from '../dialog';
 
@@ -26,24 +26,44 @@ export function SettingsPage({ onLogout }: { onLogout: () => void }) {
     void loadSessions();
   }, []);
 
-  async function importStrong(file: File) {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  async function importFile(file: File) {
     setMsg('Importing…');
     try {
+      const text = await file.text();
+      if (looksLikeBackup(text)) {
+        const s = store.restoreBackup(parseBackup(text));
+        await store.sync().catch(() => {});
+        const changed = s.added + s.restored + s.updated;
+        setMsg(
+          changed
+            ? `Backup restored: ${plural(s.workouts, 'workout')} and ${plural(s.templates, 'template')} (${plural(changed, 'item')} in total).`
+            : 'Everything in this backup is already here.',
+        );
+        return;
+      }
       await store.sync().catch(() => {});
-      const r = await api<{ workouts: number; sets: number; newExercises: string[]; skippedRows: number }>(
+      const r = await api<{ workouts: number; sets: number; newExercises: string[]; skippedRows: number; alreadyLogged: number }>(
         `/api/v1/import/strong?weightUnit=${importUnit}&distanceUnit=${prefs.distanceUnit}&tzOffset=${new Date().getTimezoneOffset()}`,
-        { method: 'POST', body: await file.text(), headers: { 'content-type': 'text/csv' } },
+        { method: 'POST', body: text, headers: { 'content-type': 'text/csv' } },
       );
       await store.sync();
       setMsg(
-        `Imported ${r.workouts} workouts / ${r.sets} sets.` +
-          (r.newExercises.length ? ` Created ${r.newExercises.length} custom exercises.` : '') +
-          (r.skippedRows ? ` Skipped ${r.skippedRows} non-set rows.` : ''),
+        (r.workouts
+          ? `Imported ${plural(r.workouts, 'workout')} and ${plural(r.sets, 'set')}.`
+          : r.alreadyLogged
+            ? 'Nothing new: every workout in this file is already logged.'
+            : 'No workouts found in this file.') +
+          (r.workouts && r.alreadyLogged ? ` Skipped ${plural(r.alreadyLogged, 'workout')} you already have.` : '') +
+          (r.newExercises.length ? ` Created ${plural(r.newExercises.length, 'custom exercise')}.` : ''),
       );
     } catch (e) {
       setMsg(`Import failed: ${(e as Error).message}`);
     }
   }
+
+  const today = () => new Date().toISOString().slice(0, 10);
 
   async function download(path: string, filename: string) {
     const auth = loadAuth()!;
@@ -91,33 +111,51 @@ export function SettingsPage({ onLogout }: { onLogout: () => void }) {
       </section>
 
       <section className="card">
-        <h3>Import from Strong</h3>
+        <h3>Export</h3>
         <p className="muted small">
-          In Strong: Settings → Export Strong Data. Importing the same file twice won't create duplicates.
+          The backup has everything: workouts, templates, measurements and settings. Restore it below, here or in the app. The CSV has your
+          workouts in Strong's format, for spreadsheets and other apps.
+        </p>
+        <div className="row">
+          <button className="primary" onClick={() => void download('/api/v1/export/json', `open-workouts-backup-${today()}.json`)}>
+            Full backup (.json)
+          </button>
+          <button
+            onClick={() =>
+              void download(
+                `/api/v1/export/strong.csv?weightUnit=${prefs.weightUnit}&distanceUnit=${prefs.distanceUnit}&tzOffset=${new Date().getTimezoneOffset()}`,
+                `open-workouts-${today()}.csv`,
+              )
+            }
+          >
+            Workouts (.csv)
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
+        <h3>Import</h3>
+        <p className="muted small">
+          Restore a backup, or import a CSV from Open Workouts or from Strong (in Strong: Settings → Export Strong Data). Workouts you
+          already have are skipped, so importing the same file twice is safe.
         </p>
         <label>
-          Weights in the file are in
+          Strong files with no unit in the header are in
           <select value={importUnit} onChange={(e) => setImportUnit(e.target.value as 'kg' | 'lb')}>
             <option value="kg">kg</option>
             <option value="lb">lb</option>
           </select>
         </label>
-        <input type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && void importStrong(e.target.files[0])} />
+        <input
+          type="file"
+          accept=".csv,text/csv,.json,application/json"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (f) void importFile(f);
+          }}
+        />
         {msg && <p>{msg}</p>}
-      </section>
-
-      <section className="card">
-        <h3>Export</h3>
-        <div className="row">
-          <button
-            onClick={() =>
-              void download(`/api/v1/export/strong.csv?weightUnit=${prefs.weightUnit}&distanceUnit=${prefs.distanceUnit}`, 'open-workouts.csv')
-            }
-          >
-            CSV (Strong format)
-          </button>
-          <button onClick={() => void download('/api/v1/export/json', 'open-workouts-backup.json')}>Full JSON backup</button>
-        </div>
       </section>
 
       <section className="card">

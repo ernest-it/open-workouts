@@ -15,7 +15,7 @@ interface DialogState {
   kind: 'dialog' | 'menu';
   title: string;
   message?: string;
-  input?: { value: string; placeholder?: string };
+  input?: { value: string; placeholder?: string; multiline?: boolean; allowEmpty?: boolean };
   actions: { text: string; tone: Tone; value: unknown }[];
   cancelValue: unknown;
   resolve: (v: unknown) => void;
@@ -33,7 +33,17 @@ export interface Dialogs {
   /** Show a message with a single OK button. */
   alert(title: string, message?: string): Promise<void>;
   /** Ask for a line of text. Resolves null when cancelled. */
-  prompt(o: { title: string; message?: string; defaultValue?: string; placeholder?: string; confirmText?: string }): Promise<string | null>;
+  prompt(o: {
+    title: string;
+    message?: string;
+    defaultValue?: string;
+    placeholder?: string;
+    confirmText?: string;
+    /** Several lines of text; Return inserts a newline. */
+    multiline?: boolean;
+    /** Saving an empty value is allowed (resolves to ''), e.g. to clear a note. */
+    allowEmpty?: boolean;
+  }): Promise<string | null>;
   /** Bottom action sheet. Resolves the chosen option's value, or null when dismissed. */
   menu<T extends string>(o: { title: string; message?: string; options: { text: string; value: T; destructive?: boolean }[] }): Promise<T | null>;
   /** Short, non-blocking message just above the tab bar, optionally with one action (e.g. Undo). */
@@ -86,7 +96,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           kind: 'dialog',
           title: o.title,
           message: o.message,
-          input: { value: o.defaultValue ?? '', placeholder: o.placeholder },
+          input: { value: o.defaultValue ?? '', placeholder: o.placeholder, multiline: o.multiline, allowEmpty: o.allowEmpty },
           cancelValue: null,
           actions: [
             { text: 'Cancel', tone: 'default', value: null },
@@ -133,7 +143,7 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
   useEffect(() => {
     Animated.timing(fade, { toValue: 1, duration: 140, useNativeDriver: true }).start();
   }, [fade]);
-  const valueOf = (v: unknown) => (v === '__input__' ? text.trim() || null : v);
+  const valueOf = (v: unknown) => (v === '__input__' ? text.trim() || (d.input?.allowEmpty ? '' : null) : v);
   const color = (tone: Tone) => (tone === 'destructive' ? t.danger : tone === 'primary' ? t.accent : t.text);
 
   if (d.kind === 'menu') {
@@ -181,15 +191,20 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
                 onChangeText={setText}
                 placeholder={d.input.placeholder}
                 placeholderTextColor={t.muted}
-                selectTextOnFocus
-                returnKeyType="done"
-                onSubmitEditing={() => text.trim() && close(text.trim())}
-                style={[local.input, { color: t.text, borderColor: t.border, backgroundColor: t.bg }]}
+                selectTextOnFocus={!d.input.multiline}
+                multiline={d.input.multiline}
+                returnKeyType={d.input.multiline ? 'default' : 'done'}
+                onSubmitEditing={d.input.multiline ? undefined : () => (text.trim() || d.input?.allowEmpty) && close(text.trim())}
+                style={[
+                  local.input,
+                  { color: t.text, borderColor: t.border, backgroundColor: t.bg },
+                  d.input.multiline && { minHeight: 88, maxHeight: 180, textAlignVertical: 'top' },
+                ]}
               />
             )}
             <View style={local.actions}>
               {d.actions.map((a) => {
-                const disabled = a.value === '__input__' && !text.trim();
+                const disabled = a.value === '__input__' && !text.trim() && !d.input?.allowEmpty;
                 return (
                   <Pressable
                     key={String(a.value)}

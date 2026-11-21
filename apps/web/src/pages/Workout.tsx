@@ -198,6 +198,17 @@ function ExerciseBlock({
   const [tool, setTool] = useState<'plates' | 'warmup' | null>(null);
   if (!ex) return null;
   const lt = ex.logType;
+  const pinned = store.pinnedNote(ex.id);
+  const editPinned = async () => {
+    const v = await dialog.prompt({
+      title: pinned ? 'Edit pinned note' : 'Pin a note',
+      message: `Shows on ${ex.name} every time you do it. Good for seat settings, grip or cues.`,
+      defaultValue: pinned ?? '',
+      placeholder: 'e.g. Seat on 4, pause at the bottom',
+      allowEmpty: !!pinned,
+    });
+    if (v != null) store.setPinnedNote(ex.id, v || null);
+  };
   const showWeightCol = lt === 'weight_reps' || lt === 'weighted_bodyweight' || lt === 'assisted_bodyweight';
   const showReps = lt !== 'duration' && lt !== 'distance_duration';
   const showDistance = lt === 'distance_duration';
@@ -230,6 +241,11 @@ function ExerciseBlock({
               </button>
             </>
           )}
+          {!pinned && (
+            <button className="ghost small" onClick={() => void editPinned()} title="Pin a note that shows every time you do this exercise">
+              Pin note
+            </button>
+          )}
           <button
             className="ghost small danger"
             onClick={async () => {
@@ -252,9 +268,15 @@ function ExerciseBlock({
           </button>
         </div>
       </div>
+      {pinned && (
+        <button className="pinned-note" onClick={() => void editPinned()} title="Pinned note: shows every time you do this exercise. Click to edit.">
+          <span aria-hidden>📌</span> {pinned}
+        </button>
+      )}
       <input
         className="note-input"
-        placeholder="Exercise notes"
+        placeholder="Note for this workout (shows in History)"
+        aria-label={`Note for ${ex.name} in this workout`}
         value={we.notes ?? ''}
         onChange={(e) => store.update('workoutExercises', we.id, { notes: e.target.value || null })}
       />

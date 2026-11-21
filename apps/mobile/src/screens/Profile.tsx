@@ -1,8 +1,20 @@
 import { useMemo, useState } from 'react';
 import { Linking, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
-import { MEASUREMENT_KINDS, fromKg, importStrongCsv, toKg, workoutsPerWeek, type MeasurementKind } from '@open-workouts/shared';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import {
+  BUILTIN_EXERCISES,
+  MEASUREMENT_KINDS,
+  exportStrongCsv,
+  fromKg,
+  importStrongCsv,
+  looksLikeBackup,
+  parseBackup,
+  toKg,
+  workoutsPerWeek,
+  type MeasurementKind,
+} from '@open-workouts/shared';
 import { usePrefs, useStore, type Account, type Prefs } from '../state';
 import { Button, Card, Chips, H2, IconButton, NumInput, Screen, T, formatDate, label, styles, useTheme } from '../ui';
 import { useDialog } from '../dialog';
@@ -104,31 +116,98 @@ export function SettingsScreen({ account, onSignOut }: { account: Account; onSig
   const [importing, setImporting] = useState(false);
   const [importUnit, setImportUnit] = useState<'kg' | 'lb'>(prefs.weightUnit);
 
-  async function importCsv() {
-    const res = await DocumentPicker.getDocumentAsync({ type: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'], copyToCacheDirectory: true });
+  const [exporting, setExporting] = useState<'csv' | 'json' | null>(null);
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  async function importFile() {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: ['text/csv', 'text/comma-separated-values', 'application/json', 'text/plain', '*/*'],
+      copyToCacheDirectory: true,
+    });
     if (res.canceled || !res.assets?.[0]) return;
     setImporting(true);
     try {
-      const text = await new File(res.assets[0].uri).text();
       // Parsed on-device so it also works in local-only mode; synced afterwards.
+      const text = await new File(res.assets[0].uri).text();
+      if (looksLikeBackup(text)) {
+        const s = store.restoreBackup(parseBackup(text));
+        void store.sync().catch(() => {});
+        const changed = s.added + s.restored + s.updated;
+        void dialog.alert(
+          changed ? 'Backup restored' : 'Already up to date',
+          changed
+            ? `Restored ${plural(s.workouts, 'workout')} and ${plural(s.templates, 'template')} (${plural(changed, 'item')} in total).`
+            : 'Everything in this backup is already on this device.',
+        );
+        return;
+      }
       const r = importStrongCsv(text, {
         weightUnit: importUnit,
         distanceUnit: prefs.distanceUnit,
         existingExercises: store.all('exercises'),
+        existingWorkouts: store.all('workouts'),
       });
       store.applyRemote(r.changes, true);
       void store.sync().catch(() => {});
       const n = r.summary.newExercises.length;
+      const dup = r.summary.alreadyLogged;
       void dialog.alert(
-        'Import complete',
-        `${r.summary.workouts} workouts and ${r.summary.sets} sets imported${n ? `, plus ${n} new exercise${n === 1 ? '' : 's'}` : ''}.`,
+        r.summary.workouts ? 'Import complete' : 'Nothing new to import',
+        r.summary.workouts
+          ? `${plural(r.summary.workouts, 'workout')} and ${plural(r.summary.sets, 'set')} imported${n ? `, plus ${plural(n, 'new exercise')}` : ''}.${dup ? ` Skipped ${plural(dup, 'workout')} you already have.` : ''}`
+          : dup
+            ? dup === 1
+              ? 'The workout in this file is already logged.'
+              : `All ${dup} workouts in this file are already logged.`
+            : 'No workouts found in this file.',
       );
     } catch (e) {
-      void dialog.alert('Import failed', `${(e as Error).message}
+      void dialog.alert(
+        'Import failed',
+        `${(e as Error).message}
 
-Make sure the file is a Strong CSV export.`);
+Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts backup (.json).`,
+      );
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function exportFile(kind: 'csv' | 'json') {
+    if (!(await Sharing.isAvailableAsync())) {
+      void dialog.alert('Export unavailable', 'Sharing files is not supported on this device.');
+      return;
+    }
+    setExporting(kind);
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      let text: string;
+      if (kind === 'json') text = JSON.stringify(store.backup());
+      else {
+        const names = new Map([...BUILTIN_EXERCISES, ...store.all('exercises')].map((e) => [e.id, e.name]));
+        text = exportStrongCsv(
+          {
+            workouts: store.all('workouts'),
+            workoutExercises: store.all('workoutExercises'),
+            sets: store.all('sets'),
+            exerciseName: (id) => names.get(id) ?? id,
+          },
+          { weightUnit: prefs.weightUnit, distanceUnit: prefs.distanceUnit },
+        );
+      }
+      const file = new File(Paths.cache, `open-workouts-${kind === 'json' ? 'backup-' : ''}${date}.${kind}`);
+      if (file.exists) file.delete();
+      file.create();
+      await file.write(text);
+      await Sharing.shareAsync(file.uri, {
+        mimeType: kind === 'json' ? 'application/json' : 'text/csv',
+        UTI: kind === 'json' ? 'public.json' : 'public.comma-separated-values-text',
+        dialogTitle: kind === 'json' ? 'Save backup' : 'Export workouts',
+      });
+    } catch (e) {
+      void dialog.alert('Export failed', (e as Error).message);
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -150,12 +229,27 @@ Make sure the file is a Strong CSV export.`);
         <NumInput value={+fromKg(prefs.barWeightKg, prefs.weightUnit).toFixed(2)} onChange={(v) => setPref({ barWeightKg: toKg(v ?? 0, prefs.weightUnit) })} />
       </Card>
       <Card>
-        <T bold>Import from Strong</T>
+        <T bold>Export</T>
         <T small muted>
-          Export from Strong (Settings → Export Strong Data), then pick the CSV. Re-importing is safe.
+          The backup has everything: workouts, templates, measurements and settings. Restore it here or on another device. The CSV has
+          your workouts in Strong's format, for spreadsheets and other apps.
         </T>
-        <Chips options={[{ value: 'kg' as const, label: 'File is in kg' }, { value: 'lb' as const, label: 'File is in lb' }]} value={importUnit} onChange={setImportUnit} />
-        <Button title={importing ? 'Importing…' : 'Choose CSV file'} disabled={importing} onPress={importCsv} />
+        <Button variant="primary" title={exporting === 'json' ? 'Preparing…' : 'Save full backup (.json)'} disabled={!!exporting} onPress={() => void exportFile('json')} />
+        <Button title={exporting === 'csv' ? 'Preparing…' : 'Export workouts (.csv)'} disabled={!!exporting} onPress={() => void exportFile('csv')} />
+      </Card>
+      <Card>
+        <T bold>Import</T>
+        <T small muted>
+          Restore a backup, or import a CSV from this app or from Strong (Settings → Export Strong Data). Workouts you already have are
+          skipped, so importing the same file twice is safe.
+        </T>
+        <View style={styles.rowBetween}>
+          <T small muted style={{ flex: 1 }}>
+            Strong files with no unit in the header are in
+          </T>
+          <Chips options={[{ value: 'kg' as const, label: 'kg' }, { value: 'lb' as const, label: 'lb' }]} value={importUnit} onChange={setImportUnit} />
+        </View>
+        <Button title={importing ? 'Importing…' : 'Choose file'} disabled={importing} onPress={importFile} />
       </Card>
       <Card>
         <T bold>Sync</T>

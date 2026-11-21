@@ -114,8 +114,8 @@ Authorization: Bearer <token>
 | `POST /api/v1/tokens` | ✓ | Create a named long-lived API token |
 | `POST /api/v1/sync` | ✓ | See above |
 | `POST /api/v1/import/strong?weightUnit=kg\|lb&distanceUnit=km\|mi&tzOffset=<min>` | ✓ | Body: the CSV (`text/csv`) or `{"csv": "..."}` |
-| `GET /api/v1/export/strong.csv?weightUnit=&distanceUnit=` | ✓ | Strong-compatible CSV |
-| `GET /api/v1/export/json` | ✓ | Full backup; re-importable through `/sync` |
+| `GET /api/v1/export/strong.csv?weightUnit=&distanceUnit=&tzOffset=<min>` | ✓ | Strong-compatible CSV (units in the header; times in the given zone). Workouts already logged are skipped when it is imported back |
+| `GET /api/v1/export/json` | ✓ | Full backup (`packages/shared/src/backup.ts`). The apps restore it on-device with `WorkoutStore.restoreBackup` and push it through `/sync` |
 | `/api/v1/insights/*` | ✓ | AI insights: digest, reports, comparisons, Q&A, weekly schedule; see [AI_INSIGHTS.md](AI_INSIGHTS.md) |
 | `POST /mcp` | ✓ | Read-only MCP server (Streamable HTTP, JSON-RPC) for AI assistants |
 

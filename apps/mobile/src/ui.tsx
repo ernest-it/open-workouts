@@ -1,5 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  AppState,
+  InputAccessoryView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -165,6 +168,43 @@ export function Input(props: TextInputProps) {
   );
 }
 
+const NUMPAD_ACCESSORY = 'numpad-done';
+
+/**
+ * Keeps text fields from staying focused after the keyboard is gone. Android
+ * leaves a field focused when the keyboard is hidden with Back or the hide key,
+ * so the cursor sits there and the keyboard pops up again every time the app is
+ * reopened. Mount once near the root.
+ */
+export function KeyboardFocusGuard() {
+  const t = useTheme();
+  useEffect(() => {
+    const blur = () => TextInput.State.currentlyFocusedInput()?.blur();
+    const hide = Keyboard.addListener('keyboardDidHide', blur);
+    const app = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') {
+        Keyboard.dismiss();
+        blur();
+      }
+    });
+    return () => {
+      hide.remove();
+      app.remove();
+    };
+  }, []);
+  // iOS number pads have no return key; give them a Done button.
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <InputAccessoryView nativeID={NUMPAD_ACCESSORY}>
+      <View style={[styles.accessory, { backgroundColor: t.surface2, borderColor: t.border }]}>
+        <Pressable onPress={() => Keyboard.dismiss()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Done">
+          <Text style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>Done</Text>
+        </Pressable>
+      </View>
+    </InputAccessoryView>
+  );
+}
+
 /** Numeric input that tolerates partial text ("1.", "") while typing. */
 export function NumInput({
   value,
@@ -191,6 +231,8 @@ export function NumInput({
       placeholder={placeholder}
       accessibilityLabel={accessibilityLabel}
       keyboardType="decimal-pad"
+      returnKeyType="done"
+      inputAccessoryViewID={Platform.OS === 'ios' ? NUMPAD_ACCESSORY : undefined}
       selectTextOnFocus
       onChangeText={(s) => {
         setText(s);
@@ -310,6 +352,7 @@ export const styles = StyleSheet.create({
   num: { minWidth: 62, textAlign: 'center', paddingVertical: 6, marginVertical: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  accessory: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth },
   iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6, marginRight: 6 },
 });

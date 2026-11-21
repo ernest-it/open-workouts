@@ -8,14 +8,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 export interface Dialogs {
   confirm(o: { title: string; message?: string; confirmText?: string; cancelText?: string; destructive?: boolean }): Promise<boolean>;
   alert(title: string, message?: string): Promise<void>;
-  prompt(o: { title: string; message?: string; defaultValue?: string; placeholder?: string; confirmText?: string }): Promise<string | null>;
+  prompt(o: { title: string; message?: string; defaultValue?: string; placeholder?: string; confirmText?: string; allowEmpty?: boolean }): Promise<string | null>;
   toast(message: string, action?: { text: string; onClick: () => void }): void;
 }
 
 interface State {
   title: string;
   message?: string;
-  input?: { value: string; placeholder?: string };
+  input?: { value: string; placeholder?: string; allowEmpty?: boolean };
   confirmText: string;
   cancelText: string | null;
   destructive?: boolean;
@@ -63,7 +63,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         open({
           title: o.title,
           message: o.message,
-          input: { value: o.defaultValue ?? '', placeholder: o.placeholder },
+          input: { value: o.defaultValue ?? '', placeholder: o.placeholder, allowEmpty: o.allowEmpty },
           confirmText: o.confirmText ?? 'Save',
           cancelText: 'Cancel',
           cancelValue: null,
@@ -106,7 +106,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
 function DialogBox({ s, close }: { s: State; close: (v: unknown) => void }) {
   const [text, setText] = useState(s.input?.value ?? '');
   const confirmRef = useRef<HTMLButtonElement>(null);
-  const submit = () => close(s.input ? text.trim() || null : s.cancelText === null ? undefined : true);
+  const submit = () => close(s.input ? text.trim() || (s.input.allowEmpty ? '' : null) : s.cancelText === null ? undefined : true);
   useEffect(() => {
     if (!s.input) confirmRef.current?.focus();
     const on = (e: KeyboardEvent) => e.key === 'Escape' && close(s.cancelValue);
@@ -123,7 +123,7 @@ function DialogBox({ s, close }: { s: State; close: (v: unknown) => void }) {
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
-          if (!s.input || text.trim()) submit();
+          if (!s.input || text.trim() || s.input.allowEmpty) submit();
         }}
       >
         <h2>{s.title}</h2>
@@ -135,7 +135,7 @@ function DialogBox({ s, close }: { s: State; close: (v: unknown) => void }) {
               {s.cancelText}
             </button>
           )}
-          <button ref={confirmRef} type="submit" className={s.destructive ? 'danger-fill' : 'primary'} disabled={!!s.input && !text.trim()}>
+          <button ref={confirmRef} type="submit" className={s.destructive ? 'danger-fill' : 'primary'} disabled={!!s.input && !text.trim() && !s.input.allowEmpty}>
             {s.confirmText}
           </button>
         </div>

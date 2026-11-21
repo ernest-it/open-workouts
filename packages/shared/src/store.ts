@@ -6,6 +6,7 @@
 // * `sync()` pushes pending rows and pulls everything newer than the last
 //   server revision. The server resolves conflicts with last-write-wins.
 
+import { makeBackup, planRestore, type Backup, type ParsedBackup, type RestoreSummary } from './backup';
 import { BUILTIN_EXERCISES } from './exercises';
 import {
   BUILTIN_PREFIX,
@@ -54,6 +55,9 @@ export interface ServerConfig {
 
 type Maps = { [K in CollectionName]: Map<string, RowTypes[K]> };
 type Editable<T> = Omit<T, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
+
+/** Settings key prefix for pinned exercise notes (`pin:<exerciseId>`). */
+export const PINNED_NOTE_PREFIX = 'pin:';
 
 export function randomId(): string {
   const c = (globalThis as { crypto?: Crypto }).crypto;
@@ -201,6 +205,30 @@ export class WorkoutStore {
       }
     }
     this.emit();
+  }
+
+  // ---- backup ---------------------------------------------------------------
+  /** Everything this device holds, in the backup format (see backup.ts). */
+  backup(): Backup {
+    const data: ChangeSet = {};
+    for (const c of COLLECTION_NAMES) (data as Record<string, unknown[]>)[c] = this.all(c);
+    return makeBackup(data, this.now());
+  }
+
+  /** Merges a parsed backup into the store. The changes are pushed on the next sync. */
+  restoreBackup(backup: ParsedBackup): RestoreSummary {
+    const active = this.activeWorkout();
+    const plan = planRestore(backup.changes, (c, id) => this.maps[c].get(id) as never, this.now());
+    // Never bring back a second in-progress workout next to the current one.
+    if (active && plan.changes.workouts) {
+      const extra = plan.changes.workouts.filter((w) => w.endedAt == null && w.id !== active.id);
+      if (extra.length) {
+        plan.changes.workouts = plan.changes.workouts.filter((w) => !extra.includes(w));
+        plan.summary.workouts -= extra.length;
+      }
+    }
+    this.applyRemote(plan.changes, true);
+    return plan.summary;
   }
 
   get dataset(): Dataset {
@@ -437,7 +465,7 @@ export class WorkoutStore {
         exerciseId: we.exerciseId,
         position: we.position,
         supersetId: we.supersetId,
-        notes: we.notes,
+        notes: null, // a workout's notes are about that session only; pinned notes carry over
         restSeconds: we.restSeconds,
       });
       for (const s of this.setsOf(we.id)) {
@@ -470,6 +498,36 @@ export class WorkoutStore {
       return JSON.parse(s.value) as T;
     } catch {
       return fallback;
+    }
+  }
+
+  // ---- pinned exercise notes ---------------------------------------------------
+  // A pinned note belongs to the exercise, not to one workout: it is shown every
+  // time the exercise is logged (seat height, grip, cues). It is stored as a
+  // setting so it also works for built-in exercises, which are read-only.
+  // The per-workout note is WorkoutExercise.notes and shows up in History.
+
+  pinnedNote(exerciseId: string): string | null {
+    const row = this.get('settings', PINNED_NOTE_PREFIX + exerciseId);
+    if (!row) return null;
+    try {
+      const v = JSON.parse(row.value) as unknown;
+      return typeof v === 'string' && v.trim() ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  setPinnedNote(exerciseId: string, text: string | null) {
+    const key = PINNED_NOTE_PREFIX + exerciseId;
+    const v = text?.trim();
+    if (!v) return this.remove('settings', key);
+    const cur = this.maps.settings.get(key);
+    if (cur && !cur.deletedAt) this.update('settings', key, { value: JSON.stringify(v) });
+    else {
+      // Re-pinning after an unpin revives the tombstone so sync sees the newer edit.
+      const t = Math.max(this.now(), (cur?.updatedAt ?? 0) + 1);
+      this.put('settings', { id: key, value: JSON.stringify(v), createdAt: cur?.createdAt ?? t, updatedAt: t, deletedAt: null });
     }
   }
 

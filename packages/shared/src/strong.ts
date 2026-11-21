@@ -26,6 +26,12 @@ export interface StrongImportOptions {
   distanceUnit: DistanceUnit;
   /** User's existing custom exercises (to match by name before creating new ones). */
   existingExercises?: Exercise[];
+  /**
+   * Workouts already logged. A workout in the file with the same name and start
+   * time (to the minute) is skipped, so a file exported from this app can be
+   * imported back without duplicating what is already there.
+   */
+  existingWorkouts?: Workout[];
   /** Offset to apply to the naive timestamps in the file, in minutes (UTC = local + offset). Defaults to the runtime's local zone. */
   timezoneOffsetMinutes?: number;
   now?: number;
@@ -33,7 +39,7 @@ export interface StrongImportOptions {
 
 export interface StrongImportResult {
   changes: Required<Pick<ChangeSet, 'exercises' | 'workouts' | 'workoutExercises' | 'sets'>>;
-  summary: { workouts: number; sets: number; newExercises: string[]; skippedRows: number };
+  summary: { workouts: number; sets: number; newExercises: string[]; skippedRows: number; alreadyLogged: number };
 }
 
 const HEADER_ALIASES: Record<string, string> = {
@@ -131,7 +137,7 @@ export function importStrongCsv(text: string, opts: StrongImportOptions): Strong
   const now = opts.now ?? Date.now();
   const result: StrongImportResult = {
     changes: { exercises: [], workouts: [], workoutExercises: [], sets: [] },
-    summary: { workouts: 0, sets: 0, newExercises: [], skippedRows: 0 },
+    summary: { workouts: 0, sets: 0, newExercises: [], skippedRows: 0, alreadyLogged: 0 },
   };
   if (rows.length < 2) return result;
 
@@ -164,6 +170,13 @@ export function importStrongCsv(text: string, opts: StrongImportOptions): Strong
     if (!e.deletedAt) customByKey.set(exerciseNameKey(e.name), e);
   }
 
+  const loggedKey = (name: string, startedAt: number) => `${name.trim().toLowerCase()}|${Math.round(startedAt / 60_000)}`;
+  const logged = new Set<string>();
+  for (const w of opts.existingWorkouts ?? []) {
+    if (!w.deletedAt) logged.add(loggedKey(w.name, w.startedAt));
+  }
+  const duplicates = new Set<string>();
+
   const workouts = new Map<string, Workout>();
   const wexByKey = new Map<string, WorkoutExercise>();
   const setCounters = new Map<string, number>();
@@ -182,6 +195,11 @@ export function importStrongCsv(text: string, opts: StrongImportOptions): Strong
     const workoutName = col(r, 'workoutName').trim() || 'Workout';
     const wKey = `${col(r, 'workoutNumber').trim()}|${dateStr.trim()}|${workoutName}`;
     const workoutId = `strong-${fnv1a(wKey)}`;
+    if (duplicates.has(workoutId)) continue;
+    if (!workouts.has(workoutId) && logged.has(loggedKey(workoutName, startedAt))) {
+      duplicates.add(workoutId);
+      continue;
+    }
     let w = workouts.get(workoutId);
     if (!w) {
       const durRaw = col(r, 'duration');
@@ -299,37 +317,42 @@ export function importStrongCsv(text: string, opts: StrongImportOptions): Strong
   result.changes.workoutExercises = [...wexByKey.values()];
   result.summary.workouts = workouts.size;
   result.summary.sets = result.changes.sets.length;
+  result.summary.alreadyLogged = duplicates.size;
   return result;
 }
 
-const STRONG_HEADER = [
-  'Date',
-  'Workout Name',
-  'Duration',
-  'Exercise Name',
-  'Set Order',
-  'Weight',
-  'Reps',
-  'Distance',
-  'Seconds',
-  'Notes',
-  'Workout Notes',
-  'RPE',
-];
+// Same columns as Strong's current export. Units are in the header, so the
+// file reads back correctly whatever units the importer has selected.
+function strongHeader(units: { weightUnit: WeightUnit; distanceUnit: DistanceUnit }) {
+  return [
+    'Workout #',
+    'Date',
+    'Workout Name',
+    'Duration (sec)',
+    'Exercise Name',
+    'Set Order',
+    `Weight (${units.weightUnit === 'lb' ? 'lbs' : 'kg'})`,
+    'Reps',
+    'RPE',
+    `Distance (${units.distanceUnit === 'mi' ? 'miles' : 'km'})`,
+    'Seconds',
+    'Notes',
+    'Workout Notes',
+  ];
+}
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
-function formatNaive(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function formatStrongDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+/** Local wall-clock time; with an offset (UTC = local + offset, as from getTimezoneOffset) for a zone other than the runtime's. */
+function formatNaive(ms: number, offsetMinutes?: number): string {
+  if (offsetMinutes == null) {
+    const d = new Date(ms);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  const d = new Date(ms - offsetMinutes * 60_000);
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 }
 
 /** Export workouts to a Strong-compatible CSV (importable by Strong-compatible apps). */
@@ -340,7 +363,7 @@ export function exportStrongCsv(
     sets: WorkoutSet[];
     exerciseName: (id: string) => string;
   },
-  units: { weightUnit: WeightUnit; distanceUnit: DistanceUnit },
+  units: { weightUnit: WeightUnit; distanceUnit: DistanceUnit; timezoneOffsetMinutes?: number },
 ): string {
   const alive = <T extends { deletedAt: number | null }>(x: T) => !x.deletedAt;
   const wexByWorkout = new Map<string, WorkoutExercise[]>();
@@ -355,9 +378,12 @@ export function exportStrongCsv(
     arr.push(s);
     setsByWex.set(s.workoutExerciseId, arr);
   }
-  const out: (string | number | null)[][] = [STRONG_HEADER];
-  const workouts = data.workouts.filter(alive).sort((a, b) => a.startedAt - b.startedAt);
+  const out: (string | number | null)[][] = [strongHeader(units)];
+  // Unfinished workouts aren't logs yet.
+  const workouts = data.workouts.filter((w) => alive(w) && w.endedAt != null).sort((a, b) => a.startedAt - b.startedAt);
+  let workoutNumber = 0;
   for (const w of workouts) {
+    workoutNumber++;
     const dur = w.endedAt ? Math.max(0, Math.round((w.endedAt - w.startedAt) / 1000)) : 0;
     const wexs = (wexByWorkout.get(w.id) ?? []).sort((a, b) => a.position - b.position);
     for (const we of wexs) {
@@ -367,18 +393,19 @@ export function exportStrongCsv(
         const order =
           s.kind === 'warmup' ? 'W' : s.kind === 'drop' ? 'D' : s.kind === 'failure' ? 'F' : String(++n);
         out.push([
-          formatNaive(w.startedAt),
+          workoutNumber,
+          formatNaive(w.startedAt, units.timezoneOffsetMinutes),
           w.name,
-          formatStrongDuration(dur),
+          dur,
           data.exerciseName(we.exerciseId),
           order,
           s.weight != null ? +fromKg(s.weight, units.weightUnit).toFixed(2) : 0,
           s.reps ?? 0,
+          s.rpe ?? '',
           s.distance != null ? +(s.distance / (units.distanceUnit === 'mi' ? 1609.344 : 1000)).toFixed(3) : 0,
           s.duration ?? 0,
           we.notes ?? '',
           w.notes ?? '',
-          s.rpe ?? '',
         ]);
       }
     }
