@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatDuration, type Template, type TemplateSet } from '@open-workouts/shared';
+import { formatDuration, templateLastDone, type Template, type TemplateSet } from '@open-workouts/shared';
 import { navigate } from '../router';
 import { usePrefs, useStore } from '../state';
 import { ExercisePicker, Modal, formatDate, showWeight } from '../ui';
@@ -152,10 +152,8 @@ function TemplatePreview({ id, onClose, onEdit }: { id: string; onClose: () => v
       .filter((s) => s.templateExerciseId === teId)
       .sort((a, b) => a.position - b.position);
   const total = tes.reduce((n, te) => n + setsOf(te.id).length, 0);
-  const last = store
-    .all('workouts')
-    .filter((w) => w.templateId === id && w.endedAt != null)
-    .sort((a, b) => b.startedAt - a.startedAt)[0];
+  const lastAt = templateLastDone({ ...store.dataset, templates: store.all('templates') }).get(id) ?? 0;
+  const last = lastAt ? { startedAt: lastAt } : undefined;
   const active = store.activeWorkout();
   const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
   const describe = (s: TemplateSet) => {

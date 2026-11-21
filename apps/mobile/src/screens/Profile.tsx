@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
@@ -8,21 +8,30 @@ import {
   BUILTIN_EXERCISES,
   MEASUREMENT_KINDS,
   exportStrongCsv,
+  formatNumber,
   fromKg,
   importStrongCsv,
   looksLikeBackup,
   parseBackup,
   toKg,
+  weeklyGoal,
   workoutsPerWeek,
   type MeasurementKind,
 } from '@open-workouts/shared';
 import { usePrefs, useStore, type Account, type Prefs } from '../state';
+import { useNav } from '../nav';
 import { Button, Card, Chips, Eyebrow, H2, IconButton, NumInput, Screen, Segmented, T, formatDate, label, styles, useTheme, type IconName } from '../ui';
 import { AppearanceCard } from './Appearance';
+import { LineChart } from '../chart';
+import { BodyHeatmap } from '../bodymap';
+import { autoBackup, listAutoBackups } from '../autobackup';
+import { APP_VERSION } from '../update';
+import { allowReminders } from '../reminders';
 import { useDialog } from '../dialog';
 
 export function ProfileScreen({ account }: { account: Account }) {
   const store = useStore();
+  const nav = useNav();
   const prefs = usePrefs();
   const t = useTheme();
   const weeks = useMemo(() => workoutsPerWeek(store.dataset, 12), [store.dataset]);
@@ -31,11 +40,14 @@ export function ProfileScreen({ account }: { account: Account }) {
   const total = finished.length;
   const thisWeek = weeks[weeks.length - 1]?.count ?? 0;
   const avg = weeks.length ? weeks.reduce((n, w) => n + w.count, 0) / weeks.length : 0;
-  // Consecutive weeks (ending this week or last week) with at least one workout.
-  let streak = 0;
-  for (let i = weeks.length - 1 - (thisWeek ? 0 : 1); i >= 0 && weeks[i]!.count > 0; i--) streak++;
+  // Weeks in a row that hit the weekly goal (the same streak as on the Train tab).
+  const streak = useMemo(() => weeklyGoal(store.dataset, prefs.weeklyGoal).streak, [store.dataset, prefs.weeklyGoal]);
   return (
-    <Screen title={account.server?.username ?? 'Profile'} subtitle={account.server ? 'Synced with your server' : 'Local-only mode'}>
+    <Screen
+      title={account.server?.username ?? 'Profile'}
+      subtitle={<SyncStatus account={account} />}
+      right={<IconButton name="settings-outline" label="Settings" size={24} color={t.text} filled onPress={() => nav.push({ name: 'settings' })} />}
+    >
       <View style={[styles.row, { gap: 10, marginTop: 4 }]}>
         <StatTile icon="barbell" value={String(total)} caption="Workouts" />
         <StatTile icon="flame" value={String(streak)} caption={`Week streak`} />
@@ -73,6 +85,7 @@ export function ProfileScreen({ account }: { account: Account }) {
           </T>
         </View>
       </Card>
+      <BodyHeatmap />
       <Measurements prefs={prefs} />
     </Screen>
   );
@@ -94,6 +107,16 @@ function Measurements({ prefs }: { prefs: Prefs }) {
       <H2>Measurements</H2>
       <Chips options={MEASUREMENT_KINDS.map((k) => ({ value: k, label: label(k) }))} value={kind} onChange={setKind} />
       <Card>
+      {list.length >= 2 && (
+        <View style={{ marginBottom: 12 }}>
+          <LineChart
+            label={label(kind)}
+            height={150}
+            points={list.map((m) => ({ at: m.takenAt, value: show(m.value) })).reverse()}
+            format={(v) => `${formatNumber(v, 1)} ${unit}`}
+          />
+        </View>
+      )}
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <NumInput value={value} onChange={setValue} placeholder={`New ${label(kind).toLowerCase()}`} accessibilityLabel={`New ${label(kind)} value in ${unit}`} />
@@ -279,6 +302,42 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
             accessibilityLabel={`Bar weight in ${prefs.weightUnit}`}
           />
         </View>
+        <View style={[local.setting, { marginTop: 12 }]}>
+          <View style={{ flex: 1 }}>
+            <T>Streak reminders</T>
+            <T small muted>
+              A notification on the last day you can still reach your weekly goal ({prefs.weeklyGoal} a week; change it on the Train tab).
+            </T>
+          </View>
+          <Switch
+            value={prefs.streakReminders}
+            onValueChange={async (v) => {
+              if (v && !(await allowReminders())) {
+                void dialog.alert('Notifications are off', 'Allow notifications for Open Workouts in your phone settings to get streak reminders.');
+                return;
+              }
+              setPref({ streakReminders: v });
+            }}
+            trackColor={{ true: t.accent, false: t.surface2 }}
+            thumbColor="#ffffff"
+            accessibilityLabel="Streak reminders"
+          />
+        </View>
+        <View style={[local.setting, { marginBottom: 0 }]}>
+          <View style={{ flex: 1 }}>
+            <T>Check for updates</T>
+            <T small muted>
+              Version {APP_VERSION}. Asks GitHub once a day for a newer release.
+            </T>
+          </View>
+          <Switch
+            value={prefs.checkUpdates}
+            onValueChange={(v) => setPref({ checkUpdates: v })}
+            trackColor={{ true: t.accent, false: t.surface2 }}
+            thumbColor="#ffffff"
+            accessibilityLabel="Check for updates"
+          />
+        </View>
       </Card>
 
       <Eyebrow style={{ marginTop: 18 }}>Your data</Eyebrow>
@@ -291,6 +350,7 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
         <Button variant="primary" icon="cloud-download-outline" title={exporting === 'json' ? 'Preparing…' : 'Save full backup (.json)'} disabled={!!exporting} onPress={() => void exportFile('json')} />
         <Button icon="document-text-outline" title={exporting === 'csv' ? 'Preparing…' : 'Export workouts (.csv)'} disabled={!!exporting} onPress={() => void exportFile('csv')} />
       </Card>
+      <AutoBackupsCard />
       <Card>
         <T bold style={{ fontSize: 16 }}>Import</T>
         <T small muted style={{ marginTop: 2 }}>
@@ -339,7 +399,7 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
           </>
         ) : (
           <T small muted>
-            Local-only mode. Sign out and connect a server to sync and back up your data.
+            On this phone only. Tap Connect a server below to sync between devices and use the web app.
           </T>
         )}
       </Card>
@@ -358,9 +418,29 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
       </Card>
       <Button
         title={account.server ? 'Sign out' : 'Connect a server'}
-        variant="danger"
+        variant={account.server ? 'danger' : 'soft'}
         onPress={async () => {
           const pending = store.pendingCount();
+          if (account.server && pending) {
+            // Unsynced changes would be lost: offer a backup file before anything else.
+            const choice = await dialog.menu({
+              title: 'Sign out?',
+              message: `${pending} change${pending === 1 ? ' has' : 's have'} not synced to ${account.server.baseUrl} yet and will be lost when you sign out.`,
+              options: [
+                { text: 'Sync now', value: 'sync' },
+                { text: 'Save a backup file first', value: 'backup' },
+                { text: 'Sign out and lose them', value: 'out', destructive: true },
+              ],
+            });
+            if (choice === 'sync')
+              void store
+                .sync()
+                .then(() => dialog.toast(store.pendingCount() ? 'Some changes still need to sync' : 'Synced. You can sign out safely now.'))
+                .catch((e: Error) => dialog.toast(`Sync failed: ${e.message}`));
+            else if (choice === 'backup') void exportFile('json');
+            else if (choice === 'out') onSignOut();
+            return;
+          }
           const ok = await dialog.confirm({
             title: account.server ? 'Sign out?' : 'Leave local mode?',
             message: account.server
@@ -377,6 +457,83 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
     </Screen>
   );
 }
+
+/** Daily backups kept on the phone, with restore. */
+function AutoBackupsCard() {
+  const store = useStore();
+  const dialog = useDialog();
+  const [, refresh] = useState(0);
+  const list = listAutoBackups();
+  const fmt = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const restore = async () => {
+    const date = await dialog.menu({
+      title: 'Restore an automatic backup',
+      message: 'Restoring adds back anything deleted since then and keeps what you added later.',
+      options: list.map((b) => ({ text: fmt(b.date), value: b.date })),
+    });
+    const b = list.find((x) => x.date === date);
+    if (!b) return;
+    try {
+      const s = store.restoreBackup(parseBackup(await b.file.text()));
+      void store.sync().catch(() => {});
+      const changed = s.added + s.restored + s.updated;
+      void dialog.alert(changed ? 'Backup restored' : 'Already up to date', changed ? `${changed} item${changed === 1 ? '' : 's'} restored.` : 'Nothing in that backup was missing.');
+    } catch (e) {
+      void dialog.alert('Restore failed', (e as Error).message);
+    }
+  };
+  return (
+    <Card>
+      <T bold style={{ fontSize: 16 }}>Automatic backups</T>
+      <T small muted style={{ marginTop: 2, marginBottom: 8 }}>
+        {list.length
+          ? `A copy is saved on this phone once a day; the last ${list.length === 1 ? 'one is' : `${list.length} are`} kept. Latest: ${fmt(list[0]!.date)}.`
+          : 'A copy is saved on this phone once a day after you log something.'}{' '}
+        They're deleted if you uninstall the app, so save a full backup elsewhere now and then.
+      </T>
+      <View style={styles.row}>
+        {list.length > 0 && <Button small variant="soft" icon="refresh" title="Restore…" onPress={() => void restore()} />}
+        <Button
+          small
+          variant="ghost"
+          icon="save-outline"
+          title="Back up now"
+          onPress={async () => {
+            const ok = await autoBackup(store, true);
+            dialog.toast(ok ? 'Backup saved' : 'Nothing to back up yet');
+            refresh((n) => n + 1);
+          }}
+        />
+      </View>
+    </Card>
+  );
+}
+
+/** One line saying where the data is and whether it's safe: synced, waiting, or failing. */
+function SyncStatus({ account }: { account: Account }) {
+  const store = useStore();
+  const nav = useNav();
+  const t = useTheme();
+  const pending = store.pendingCount();
+  const changes = `${pending} change${pending === 1 ? '' : 's'}`;
+  const [color, icon, text]: [string, IconName, string] = !account.server
+    ? [t.muted, 'phone-portrait-outline', 'On this phone only']
+    : store.lastSyncError
+      ? [t.warn, 'cloud-offline-outline', `Can't reach server${pending ? ` · ${changes} waiting` : ''}`]
+      : pending
+        ? [t.muted, 'cloud-upload-outline', `Syncing ${changes}…`]
+        : [t.accentText, 'cloud-done-outline', `Synced${store.lastSyncAt ? ` · ${relativeTime(store.lastSyncAt)}` : ''}`];
+  return (
+    <Text onPress={() => nav.push({ name: 'settings' })} accessibilityRole="button" accessibilityHint="Opens settings" style={{ color, fontSize: 15, fontWeight: '600' }}>
+      <Ionicons name={icon} size={15} color={color} /> {text}
+    </Text>
+  );
+}
+
+const relativeTime = (ms: number) => {
+  const s = Math.round((Date.now() - ms) / 1000);
+  return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+};
 
 function StatTile({ icon, value, caption }: { icon: IconName; value: string; caption: string }) {
   const t = useTheme();

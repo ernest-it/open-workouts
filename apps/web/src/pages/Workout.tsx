@@ -15,6 +15,7 @@ import {
 import { navigate } from '../router';
 import { usePrefs, useStore, type Prefs } from '../state';
 import { ExercisePicker, Modal, showWeight, weightLabel } from '../ui';
+import { Icon } from '../icons';
 import { useDialog } from '../dialog';
 import { Templates } from './Templates';
 
@@ -277,7 +278,7 @@ function ExerciseBlock({
       </div>
       {pinned && (
         <button className="pinned-note" onClick={() => void editPinned()} title="Pinned note: shows every time you do this exercise. Click to edit.">
-          <span aria-hidden>📌</span> {pinned}
+          <Icon name="pin" size={14} /> {pinned}
         </button>
       )}
       <input

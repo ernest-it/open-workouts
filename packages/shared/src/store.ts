@@ -17,6 +17,8 @@ import {
   type RowTypes,
   type SyncResponse,
   type Template,
+  type TemplateExercise,
+  type TemplateSet,
   type Workout,
   type WorkoutExercise,
   type WorkoutSet,
@@ -431,6 +433,117 @@ export class WorkoutStore {
     this.remove('workoutExercises', workoutExerciseId);
   }
 
+  /** Rewrites positions 0..n-1 in the given order (only rows whose position changes are touched). */
+  reorderWorkoutExercises(workoutId: string, orderedIds: string[]) {
+    const current = this.workoutExercises(workoutId);
+    const rest = current.filter((we) => !orderedIds.includes(we.id)).map((we) => we.id);
+    [...orderedIds, ...rest].forEach((id, position) => {
+      if (this.get('workoutExercises', id)?.position !== position) this.update('workoutExercises', id, { position });
+    });
+  }
+
+  /**
+   * Moves an exercise one place up or down. A superset moves as one block, and an exercise
+   * inside a superset moves within it.
+   */
+  moveWorkoutExercise(workoutExerciseId: string, direction: -1 | 1) {
+    const we = this.get('workoutExercises', workoutExerciseId);
+    if (!we) return;
+    const list = this.workoutExercises(we.workoutId);
+    // Blocks: consecutive exercises sharing a superset id.
+    const blocks: WorkoutExercise[][] = [];
+    for (const x of list) {
+      const last = blocks[blocks.length - 1];
+      if (last && x.supersetId && last[0]!.supersetId === x.supersetId) last.push(x);
+      else blocks.push([x]);
+    }
+    const bi = blocks.findIndex((b) => b.some((x) => x.id === workoutExerciseId));
+    const block = blocks[bi]!;
+    if (block.length > 1) {
+      // Inside a superset: swap with the neighbour in the same block.
+      const i = block.findIndex((x) => x.id === workoutExerciseId);
+      const j = i + direction;
+      if (j < 0 || j >= block.length) return;
+      [block[i], block[j]] = [block[j]!, block[i]!];
+    } else {
+      const bj = bi + direction;
+      if (bj < 0 || bj >= blocks.length) return;
+      [blocks[bi], blocks[bj]] = [blocks[bj]!, blocks[bi]!];
+    }
+    this.reorderWorkoutExercises(we.workoutId, blocks.flat().map((x) => x.id));
+  }
+
+  /**
+   * Swaps the exercise (e.g. the machine is taken). Completed sets keep their numbers; sets not
+   * yet done are refilled from the last time the new exercise was logged.
+   */
+  replaceWorkoutExercise(workoutExerciseId: string, exerciseId: string) {
+    const we = this.get('workoutExercises', workoutExerciseId);
+    if (!we || we.exerciseId === exerciseId) return;
+    const w = this.get('workouts', we.workoutId);
+    const prev = previousSets(this.dataset, exerciseId, w?.startedAt).filter((s) => s.kind !== 'warmup');
+    this.update('workoutExercises', workoutExerciseId, { exerciseId });
+    let n = 0;
+    for (const s of this.setsOf(workoutExerciseId)) {
+      if (s.kind === 'warmup' || s.completed) {
+        if (s.kind !== 'warmup') n++;
+        continue;
+      }
+      const p = prev[n++];
+      this.update('sets', s.id, { weight: p?.weight ?? null, reps: p?.reps ?? null, distance: p?.distance ?? null, duration: p?.duration ?? null });
+    }
+  }
+
+  /** Groups exercises into one superset and moves them next to each other (first one's place). */
+  makeSuperset(workoutExerciseIds: string[]) {
+    const rows = workoutExerciseIds.map((id) => this.get('workoutExercises', id)).filter((x): x is WorkoutExercise => !!x);
+    if (rows.length < 2) return;
+    const workoutId = rows[0]!.workoutId;
+    // Joining an existing superset keeps its id so the others stay grouped.
+    const supersetId = rows.find((r) => r.supersetId)?.supersetId ?? randomId();
+    const members = new Set([
+      ...rows.map((r) => r.id),
+      ...this.workoutExercises(workoutId)
+        .filter((x) => x.supersetId && rows.some((r) => r.supersetId === x.supersetId))
+        .map((x) => x.id),
+    ]);
+    for (const id of members) if (this.get('workoutExercises', id)?.supersetId !== supersetId) this.update('workoutExercises', id, { supersetId });
+    const list = this.workoutExercises(workoutId);
+    const first = list.findIndex((x) => members.has(x.id));
+    const grouped = list.filter((x) => members.has(x.id));
+    const others = list.filter((x) => !members.has(x.id));
+    others.splice(first, 0, ...grouped);
+    this.reorderWorkoutExercises(workoutId, others.map((x) => x.id));
+  }
+
+  /** Takes one exercise out of its superset; a superset left with one exercise is dissolved. */
+  leaveSuperset(workoutExerciseId: string) {
+    const we = this.get('workoutExercises', workoutExerciseId);
+    if (!we?.supersetId) return;
+    const group = this.workoutExercises(we.workoutId).filter((x) => x.supersetId === we.supersetId);
+    this.update('workoutExercises', workoutExerciseId, { supersetId: null });
+    const left = group.filter((x) => x.id !== workoutExerciseId);
+    if (left.length === 1) this.update('workoutExercises', left[0]!.id, { supersetId: null });
+    // Put it right after the superset so the group stays contiguous.
+    if (left.length >= 1) {
+      const order = this.workoutExercises(we.workoutId).filter((x) => x.id !== workoutExerciseId);
+      const lastIdx = order.map((x) => x.id).lastIndexOf(left[left.length - 1]!.id);
+      order.splice(lastIdx + 1, 0, we);
+      this.reorderWorkoutExercises(we.workoutId, order.map((x) => x.id));
+    }
+  }
+
+  /**
+   * True when the timer should rest after this exercise's set: always, except for an exercise in a
+   * superset that isn't the last one (you go straight to the next exercise).
+   */
+  restsAfter(workoutExerciseId: string): boolean {
+    const we = this.get('workoutExercises', workoutExerciseId);
+    if (!we?.supersetId) return true;
+    const group = this.workoutExercises(we.workoutId).filter((x) => x.supersetId === we.supersetId);
+    return group[group.length - 1]?.id === workoutExerciseId;
+  }
+
   /** Finish: drop sets that were never completed, stamp the end time. */
   finishWorkout(workoutId: string, opts: { dropIncomplete?: boolean } = { dropIncomplete: true }) {
     if (opts.dropIncomplete !== false) {
@@ -489,6 +602,168 @@ export class WorkoutStore {
     for (const e of this.all('templateExercises').filter((x) => x.templateId === templateId))
       this.remove('templateExercises', e.id);
     this.remove('templates', templateId);
+  }
+
+  // ---- template editing ---------------------------------------------------
+  templateExercises(templateId: string): TemplateExercise[] {
+    return this.all('templateExercises')
+      .filter((x) => x.templateId === templateId)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  templateSetsOf(templateExerciseId: string): TemplateSet[] {
+    return this.all('templateSets')
+      .filter((s) => s.templateExerciseId === templateExerciseId)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  createTemplate(name: string, folderId: string | null = null): Template {
+    return this.insert('templates', { name, folderId, notes: null, position: this.all('templates').length });
+  }
+
+  /** Adds an exercise with `count` sets, pre-filled from the last time it was done. */
+  addExerciseToTemplate(templateId: string, exerciseId: string, count = 3): TemplateExercise {
+    const te = this.insert('templateExercises', {
+      templateId,
+      exerciseId,
+      position: this.templateExercises(templateId).length,
+      supersetId: null,
+      notes: null,
+      restSeconds: null,
+    });
+    const prev = previousSets(this.dataset, exerciseId).filter((s) => s.kind !== 'warmup');
+    for (let i = 0; i < Math.max(count, prev.length); i++) {
+      const p = prev[i];
+      this.insert('templateSets', {
+        templateId,
+        templateExerciseId: te.id,
+        position: i,
+        kind: 'normal',
+        weight: p?.weight ?? null,
+        reps: p?.reps ?? null,
+        distance: p?.distance ?? null,
+        duration: p?.duration ?? null,
+      });
+    }
+    return te;
+  }
+
+  addTemplateSet(templateExerciseId: string): TemplateSet {
+    const te = this.get('templateExercises', templateExerciseId)!;
+    const sets = this.templateSetsOf(templateExerciseId);
+    const last = sets[sets.length - 1];
+    return this.insert('templateSets', {
+      templateId: te.templateId,
+      templateExerciseId,
+      position: (last?.position ?? -1) + 1,
+      kind: 'normal',
+      weight: last?.weight ?? null,
+      reps: last?.reps ?? null,
+      distance: last?.distance ?? null,
+      duration: last?.duration ?? null,
+    });
+  }
+
+  removeTemplateExercise(templateExerciseId: string) {
+    for (const s of this.templateSetsOf(templateExerciseId)) this.remove('templateSets', s.id);
+    this.remove('templateExercises', templateExerciseId);
+  }
+
+  moveTemplateExercise(templateExerciseId: string, direction: -1 | 1) {
+    const te = this.get('templateExercises', templateExerciseId);
+    if (!te) return;
+    const list = this.templateExercises(te.templateId);
+    const i = list.findIndex((x) => x.id === te.id);
+    const j = i + direction;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j]!, list[i]!];
+    list.forEach((x, k) => x.position !== k && this.update('templateExercises', x.id, { position: k }));
+  }
+
+  /** Replaces a template's exercises and sets with what was done in a workout. */
+  updateTemplateFromWorkout(templateId: string, workoutId: string) {
+    for (const te of this.templateExercises(templateId)) this.removeTemplateExercise(te.id);
+    for (const we of this.workoutExercises(workoutId)) {
+      const te = this.insert('templateExercises', {
+        templateId,
+        exerciseId: we.exerciseId,
+        position: we.position,
+        supersetId: we.supersetId,
+        notes: this.templateNoteFor(templateId, we.exerciseId),
+        restSeconds: we.restSeconds,
+      });
+      for (const s of this.setsOf(we.id))
+        this.insert('templateSets', {
+          templateId,
+          templateExerciseId: te.id,
+          position: s.position,
+          kind: s.kind,
+          weight: s.weight,
+          reps: s.reps,
+          distance: s.distance,
+          duration: s.duration,
+        });
+    }
+  }
+
+  private templateNoteFor(templateId: string, exerciseId: string): string | null {
+    return (
+      this.all('templateExercises', true).find((x) => x.templateId === templateId && x.exerciseId === exerciseId && x.notes)?.notes ?? null
+    );
+  }
+
+  /**
+   * Whether a finished workout's exercises or set counts differ from the template it came from,
+   * so the finish screen can offer to update the template.
+   */
+  workoutDiffersFromTemplate(workoutId: string): boolean {
+    const w = this.get('workouts', workoutId);
+    if (!w?.templateId || !this.get('templates', w.templateId)) return false;
+    const a = this.workoutExercises(workoutId).map((we) => `${we.exerciseId}:${this.setsOf(we.id).length}`);
+    const b = this.templateExercises(w.templateId).map((te) => `${te.exerciseId}:${this.templateSetsOf(te.id).length}`);
+    return a.join('|') !== b.join('|');
+  }
+
+  /** Starts a new workout with the same exercises and sets as an earlier one, values from last time. */
+  repeatWorkout(workoutId: string): Workout {
+    const src = this.get('workouts', workoutId)!;
+    const w = this.insert('workouts', {
+      name: src.name,
+      startedAt: this.now(),
+      endedAt: null,
+      notes: null,
+      templateId: src.templateId && this.get('templates', src.templateId) ? src.templateId : null,
+    });
+    const supersetMap = new Map<string, string>();
+    for (const old of this.workoutExercises(workoutId)) {
+      const we = this.insert('workoutExercises', {
+        workoutId: w.id,
+        exerciseId: old.exerciseId,
+        position: old.position,
+        supersetId: old.supersetId
+          ? (supersetMap.get(old.supersetId) ?? supersetMap.set(old.supersetId, randomId()).get(old.supersetId)!)
+          : null,
+        notes: null,
+        restSeconds: old.restSeconds,
+      });
+      const prev = previousSets(this.dataset, old.exerciseId, w.startedAt);
+      this.setsOf(old.id).forEach((s, i) => {
+        const p = prev.find((x) => x.position === s.position) ?? prev[i] ?? s;
+        this.insert('sets', {
+          workoutId: w.id,
+          workoutExerciseId: we.id,
+          position: s.position,
+          kind: s.kind,
+          weight: p.weight,
+          reps: p.reps,
+          distance: p.distance,
+          duration: p.duration,
+          rpe: null,
+          completed: false,
+        });
+      });
+    }
+    return w;
   }
 
   getSetting<T>(key: string, fallback: T): T {

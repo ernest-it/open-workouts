@@ -27,6 +27,22 @@ export function formatDuration(totalSeconds: number | null | undefined): string 
   return `${h > 0 ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`;
 }
 
+/** A length of time for reading rather than a running clock: "1h 18m", "45m", "40s". */
+export function formatElapsed(totalSeconds: number | null | undefined): string {
+  if (totalSeconds == null) return '';
+  const s = Math.max(0, Math.round(totalSeconds));
+  if (s < 60) return `${s}s`;
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  return m === 60 ? `${h + 1}h` : m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** A number with thousands separators and at most `decimals` decimals: 8087.5 → "8,087.5". */
+export function formatNumber(v: number, decimals = 1, locale?: string): string {
+  return v.toLocaleString(locale, { maximumFractionDigits: decimals, minimumFractionDigits: 0 });
+}
+
 export type OneRmFormula = 'brzycki' | 'epley' | 'lombardi' | 'mayhew' | 'oconner' | 'wathan';
 
 /**

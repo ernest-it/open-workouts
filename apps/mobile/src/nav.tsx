@@ -4,6 +4,8 @@ import { createContext, useContext } from 'react';
 export type Route =
   | { name: 'workout' }
   | { name: 'templateDetail'; id: string }
+  | { name: 'templateEdit'; id: string }
+  | { name: 'workoutDone'; id: string }
   | { name: 'history' }
   | { name: 'workoutDetail'; id: string }
   | { name: 'exercises' }
@@ -12,7 +14,7 @@ export type Route =
   | { name: 'insights' }
   | { name: 'settings' };
 
-export type Tab = 'profile' | 'history' | 'workout' | 'exercises' | 'insights' | 'settings';
+export type Tab = 'history' | 'workout' | 'exercises' | 'insights';
 
 export interface Nav {
   push: (r: Route) => void;

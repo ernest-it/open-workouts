@@ -56,7 +56,7 @@ export function AppearanceSection() {
             <input
               type="color"
               aria-label="Custom colour"
-              value={custom ? a.accent : '#ff5b2e'}
+              value={custom ? a.accent : '#2ee6a6'}
               onChange={(e) => setAppearance({ accent: e.target.value })}
             />
           </span>

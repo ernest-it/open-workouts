@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePlates, estimate1RM, parseStrongDuration, toKg, warmupSets, formatDuration } from '../src';
+import { calculatePlates, estimate1RM, parseStrongDuration, toKg, warmupSets, formatDuration, formatElapsed, formatNumber } from '../src';
 
 describe('calc', () => {
   it('estimates 1RM', () => {
@@ -39,5 +39,20 @@ import { BUILTIN_EXERCISES } from '../src';
 describe('built-in exercises', () => {
   it('have unique ids', () => {
     expect(new Set(BUILTIN_EXERCISES.map((e) => e.id)).size).toBe(BUILTIN_EXERCISES.length);
+  });
+});
+
+describe('formatElapsed / formatNumber', () => {
+  it('reads like a length of time', () => {
+    expect(formatElapsed(40)).toBe('40s');
+    expect(formatElapsed(45 * 60 + 10)).toBe('45m');
+    expect(formatElapsed(78 * 60)).toBe('1h 18m');
+    expect(formatElapsed(2 * 3600 + 10)).toBe('2h');
+    expect(formatElapsed(3600 + 59 * 60 + 50)).toBe('2h');
+  });
+  it('adds thousands separators', () => {
+    expect(formatNumber(8087.5, 1, 'en-US')).toBe('8,087.5');
+    expect(formatNumber(12.345, 1, 'en-US')).toBe('12.3');
+    expect(formatNumber(100, 1, 'en-US')).toBe('100');
   });
 });

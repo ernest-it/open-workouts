@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Storage from 'expo-sqlite/kv-store';
+import { autoBackup } from './autobackup';
 import {
   WorkoutStore,
   type DistanceUnit,
@@ -64,7 +65,19 @@ export async function initStore(account: Account) {
   const key = account.server ? `snapshot:${account.server.username}@${account.server.baseUrl}` : 'snapshot:local';
   store = new WorkoutStore(new SqliteKvStorage(key));
   await store.init();
-  if (!account.server) return store;
+  // Daily automatic backup: shortly after opening and when the app goes to the background.
+  const backupSoon = setTimeout(() => void autoBackup(store), 5000);
+  const backupOnLeave = AppState.addEventListener('change', (s) => {
+    if (s === 'background') void autoBackup(store);
+  });
+  const stopBackups = () => {
+    clearTimeout(backupSoon);
+    backupOnLeave.remove();
+  };
+  if (!account.server) {
+    cleanup = stopBackups;
+    return store;
+  }
   store.server = { baseUrl: account.server.baseUrl, token: account.server.token };
   const trySync = () => void store.sync().catch(() => {});
   trySync();
@@ -84,6 +97,7 @@ export async function initStore(account: Account) {
     if (s === 'background') void store.persist();
   });
   cleanup = () => {
+    stopBackups();
     unsub();
     clearInterval(interval);
     clearTimeout(timer);
@@ -105,8 +119,14 @@ export interface Prefs {
   distanceUnit: DistanceUnit;
   restSeconds: number;
   barWeightKg: number;
+  /** Workouts per week to aim for (Train tab). */
+  weeklyGoal: number;
+  /** Look for a newer release on GitHub once a day. */
+  checkUpdates: boolean;
+  /** Notify when the weekly-goal streak is about to break. */
+  streakReminders: boolean;
 }
-export const DEFAULT_PREFS: Prefs = { weightUnit: 'kg', distanceUnit: 'km', restSeconds: 120, barWeightKg: 20 };
+export const DEFAULT_PREFS: Prefs = { weightUnit: 'kg', distanceUnit: 'km', restSeconds: 120, barWeightKg: 20, weeklyGoal: 3, checkUpdates: true, streakReminders: true };
 
 export function usePrefs(): Prefs {
   const s = useStore();

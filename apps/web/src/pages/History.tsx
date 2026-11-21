@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { formatDuration, workoutPRs, workoutSummary, isWorkingSet } from '@open-workouts/shared';
+import { formatDuration, formatElapsed, workoutPRs, workoutSummary, isWorkingSet } from '@open-workouts/shared';
 import { navigate } from '../router';
 import { api, usePrefs, useStore } from '../state';
-import { Modal, formatDate, showWeight } from '../ui';
+import { Icon } from '../icons';
+import { Modal, formatDate, showVolume, showWeight } from '../ui';
 import { useDialog } from '../dialog';
 import { Markdown } from '../markdown';
 import { ActiveWorkout } from './Workout';
@@ -78,11 +79,14 @@ function WorkoutCard({ id, unit }: { id: string; unit: string }) {
         <span className="muted small">{formatDate(w.startedAt)}</span>
       </div>
       <div className="row muted small">
-        <span>⏱ {formatDuration(sum.durationSeconds)}</span>
         <span>
-          🏋 {showWeight(sum.volume, prefs)} {unit}
+          <Icon name="clock" size={14} /> {formatElapsed(sum.durationSeconds)}
         </span>
-        {prs > 0 && <span className="pr">🏆 {prs} PR{prs > 1 ? 's' : ''}</span>}
+        <span>
+          <Icon name="barbell" size={14} /> {showVolume(sum.volume, prefs)} {unit}
+        </span>
+        {prs > 0 && <span className="pr">
+            <Icon name="trophy" size={14} /> {prs} PR{prs > 1 ? 's' : ''}</span>}
       </div>
       <ul className="plain small">
         {wexs.map((we) => {
@@ -152,7 +156,7 @@ function WorkoutDetail({ id }: { id: string }) {
               }
             }}
           >
-            {comparing ? 'Comparing…' : '✨ Compare with previous'}
+            {comparing ? 'Comparing…' : 'Compare with previous'}
           </button>
           <button
             onClick={async () => {
@@ -189,7 +193,7 @@ function WorkoutDetail({ id }: { id: string }) {
         </div>
       </div>
       <p className="muted">
-        {formatDate(w.startedAt)} · {formatDuration(sum.durationSeconds)} · {showWeight(sum.volume, prefs)} {prefs.weightUnit} · {sum.setCount} sets
+        {formatDate(w.startedAt)} · {formatElapsed(sum.durationSeconds)} · {showVolume(sum.volume, prefs)} {prefs.weightUnit} · {sum.setCount} sets
       </p>
       {w.notes && <p className="notes">{w.notes}</p>}
       {comparison && (
@@ -219,7 +223,9 @@ function WorkoutDetail({ id }: { id: string }) {
                       {s.duration != null && ` ${formatDuration(s.duration)}`}
                       {s.rpe != null && <span className="muted"> @ RPE {s.rpe}</span>}
                     </td>
-                    <td>{prs.get(s.id)?.map((t) => <span key={t} className="pr small">🏆 {t}</span>)}</td>
+                    <td>{prs.get(s.id)?.map((t) => <span key={t} className="pr small">
+                          <Icon name="trophy" size={12} /> {t}
+                        </span>)}</td>
                   </tr>
                 ))}
               </tbody>

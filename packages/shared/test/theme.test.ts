@@ -22,9 +22,9 @@ describe('themes', () => {
   });
 
   it('rejects bad stored values', () => {
-    expect(parseAppearance({ mode: 'neon', accent: 'url(x)' })).toEqual({ mode: 'system', accent: 'ember' });
+    expect(parseAppearance({ mode: 'neon', accent: 'url(x)' })).toEqual({ mode: 'black', accent: 'mint' });
     expect(parseAppearance({ mode: 'black', accent: '#A1B2C3' })).toEqual({ mode: 'black', accent: '#A1B2C3' });
-    expect(parseAppearance(null)).toEqual({ mode: 'system', accent: 'ember' });
+    expect(parseAppearance(null)).toEqual({ mode: 'black', accent: 'mint' });
   });
 });
 

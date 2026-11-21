@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { store as storeRef, useStore, type Account } from '../state';
-import { Button, Card, Input, T, formatDate, styles, useTheme } from '../ui';
+import { Button, Card, Input, T, Title, formatDate, styles, useTheme } from '../ui';
+import { HeaderActions } from '../ProfileButton';
 
 interface Report {
   id: string;
@@ -103,9 +104,7 @@ export function InsightsScreen({ account }: { account: Account }) {
   if (!account.server) {
     return (
       <ScrollView style={{ backgroundColor: t.bg }} contentContainerStyle={styles.screen}>
-        <T bold style={styles.h1}>
-          Insights
-        </T>
+        <Title title="Insights" right={<HeaderActions />} />
         <T muted>AI insights run on your server. Connect a server in Settings to use them.</T>
       </ScrollView>
     );
@@ -118,9 +117,7 @@ export function InsightsScreen({ account }: { account: Account }) {
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={false} onRefresh={() => void load()} />}
     >
-      <T bold style={styles.h1}>
-        Insights
-      </T>
+      <Title title="Insights" right={<HeaderActions />} />
       {enabled === false && (
         <Card>
           <T bold>No AI model configured on the server</T>

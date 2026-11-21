@@ -174,6 +174,57 @@ export function workoutSummary(ds: Dataset, workoutId: string): WorkoutSummary {
   };
 }
 
+export interface WorkoutListEntry extends WorkoutSummary {
+  /** Exercises in order, with their number of working sets. */
+  exercises: { exerciseId: string; workingSets: number }[];
+}
+
+/**
+ * Summaries for every workout in one pass over the data, for lists. Calling workoutSummary per
+ * workout scans every set once per exercise, which gets slow with a long history.
+ */
+export function workoutSummaries(ds: Dataset): Map<string, WorkoutListEntry> {
+  const logType = new Map(ds.exercises.map((e) => [e.id, e.logType]));
+  const byWe = new Map<string, { volume: number; sets: number }>();
+  for (const s of ds.sets) {
+    if (!isWorkingSet(s)) continue;
+    const e = byWe.get(s.workoutExerciseId) ?? { volume: 0, sets: 0 };
+    e.sets++;
+    e.volume += setVolume(s, undefined);
+    byWe.set(s.workoutExerciseId, e);
+  }
+  const wexsByWorkout = groupBy(
+    ds.workoutExercises.filter(alive).sort((a, b) => a.position - b.position),
+    (x) => x.workoutId,
+  );
+  const out = new Map<string, WorkoutListEntry>();
+  for (const w of ds.workouts) {
+    if (w.deletedAt) continue;
+    const wexs = wexsByWorkout.get(w.id) ?? [];
+    let volume = 0;
+    let setCount = 0;
+    const exercises: WorkoutListEntry['exercises'] = [];
+    for (const we of wexs) {
+      const agg = byWe.get(we.id);
+      const lt = logType.get(we.exerciseId);
+      // setVolume depends on the log type; recompute only when it zeroes the volume.
+      const zero = lt === 'assisted_bodyweight' || lt === 'reps' || lt === 'duration' || lt === 'distance_duration';
+      volume += zero ? 0 : (agg?.volume ?? 0);
+      setCount += agg?.sets ?? 0;
+      exercises.push({ exerciseId: we.exerciseId, workingSets: agg?.sets ?? 0 });
+    }
+    const end = w.endedAt ?? Date.now();
+    out.set(w.id, {
+      durationSeconds: Math.max(0, Math.round((end - w.startedAt) / 1000)),
+      volume,
+      setCount,
+      exerciseCount: wexs.length,
+      exercises,
+    });
+  }
+  return out;
+}
+
 /** Workouts per ISO week (Monday start), for the dashboard chart. */
 export function workoutsPerWeek(ds: Dataset, weeks = 12, now = Date.now()): { weekStart: number; count: number }[] {
   const startOfWeek = (t: number) => {
@@ -195,6 +246,87 @@ export function workoutsPerWeek(ds: Dataset, weeks = 12, now = Date.now()): { we
     if (b) b.count++;
   }
   return buckets;
+}
+
+/** Local midnight of the Monday starting the week that contains `t`. */
+export function startOfWeek(t: number): number {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+
+/**
+ * Weekly goal progress: workouts this week, and how many weeks in a row (up to last week, plus
+ * this week once it's reached) hit the goal. This week doesn't break the streak until it's over.
+ */
+export function weeklyGoal(ds: Dataset, goal: number, now = Date.now()): { thisWeek: number; streak: number; goal: number } {
+  const counts = new Map<number, number>();
+  for (const w of ds.workouts) {
+    if (w.deletedAt || w.endedAt == null) continue;
+    const k = startOfWeek(w.startedAt);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const current = startOfWeek(now);
+  const thisWeek = counts.get(current) ?? 0;
+  const target = Math.max(1, goal);
+  let streak = thisWeek >= target ? 1 : 0;
+  // Step back a week at a time; noon avoids landing on the wrong side of a DST change.
+  for (let k = startOfWeek(current - 4 * 86_400_000); (counts.get(k) ?? 0) >= target; k = startOfWeek(k - 4 * 86_400_000)) streak++;
+  return { thisWeek, streak, goal: target };
+}
+
+/**
+ * When to warn that the weekly-goal streak is about to break: 9:00 on the last day you can still
+ * reach the goal doing one workout a day (Sunday if one is missing, Saturday if two, ...). Null
+ * when there's no streak to lose, the goal is already met, it can no longer be met, or that
+ * moment has passed.
+ */
+export function streakReminder(
+  ds: Dataset,
+  goal: number,
+  now = Date.now(),
+): { at: number; title: string; body: string } | null {
+  const g = weeklyGoal(ds, goal, now);
+  const needed = g.goal - g.thisWeek;
+  if (needed <= 0 || g.streak === 0) return null;
+  const day = new Date(startOfWeek(now));
+  day.setDate(day.getDate() + 7 - needed);
+  day.setHours(9, 0, 0, 0);
+  if (day.getTime() <= now) return null;
+  const weeks = `${g.streak}-week streak`;
+  return {
+    at: day.getTime(),
+    title: 'Keep your streak going',
+    body:
+      needed === 1
+        ? `One more workout this week keeps your ${weeks}. Today is the last day.`
+        : `${needed} more workouts this week keep your ${weeks}: one a day from today.`,
+  };
+}
+
+/**
+ * Working sets per body part per week, oldest week first, for "am I training everything?".
+ * Only finished workouts count.
+ */
+export function setsPerBodyPart(ds: Dataset, weeks = 4, now = Date.now()): { weekStart: number; sets: Record<string, number> }[] {
+  const bodyPart = new Map(ds.exercises.map((e) => [e.id, e.bodyPart]));
+  const current = startOfWeek(now);
+  const starts: number[] = [current];
+  while (starts.length < weeks) starts.unshift(startOfWeek(starts[0]! - 4 * 86_400_000));
+  const buckets = new Map(starts.map((s) => [s, {} as Record<string, number>]));
+  const wkOf = new Map<string, number>();
+  for (const w of ds.workouts) if (!w.deletedAt && w.endedAt != null) wkOf.set(w.id, startOfWeek(w.startedAt));
+  const partOfWe = new Map<string, string | undefined>();
+  for (const we of ds.workoutExercises) if (!we.deletedAt) partOfWe.set(we.id, bodyPart.get(we.exerciseId));
+  for (const s of ds.sets) {
+    if (!isWorkingSet(s)) continue;
+    const b = buckets.get(wkOf.get(s.workoutId) ?? -1);
+    const part = partOfWe.get(s.workoutExerciseId);
+    if (!b || !part) continue;
+    b[part] = (b[part] ?? 0) + 1;
+  }
+  return starts.map((weekStart) => ({ weekStart, sets: buckets.get(weekStart)! }));
 }
 
 /** Per-session best e1RM / max weight / volume series for charts. */

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { fromKg, type Exercise, type LogType } from '@open-workouts/shared';
+import { formatNumber, fromKg, type Exercise, type LogType } from '@open-workouts/shared';
 import type { Prefs } from './state';
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -76,6 +76,8 @@ export function weightLabel(logType: LogType, prefs: Prefs) {
 
 export const showWeight = (kg: number | null | undefined, prefs: Prefs) =>
   kg == null ? '' : String(+fromKg(kg, prefs.weightUnit).toFixed(2));
+/** A total (volume) with thousands separators: "8,087.5". */
+export const showVolume = (kg: number, prefs: Prefs) => formatNumber(fromKg(kg, prefs.weightUnit), 1);
 
 export function formatDate(ms: number) {
   return new Date(ms).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });

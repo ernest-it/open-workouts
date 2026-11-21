@@ -1,42 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Keyboard, Modal, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
-import { useKeepAwake } from 'expo-keep-awake';
+import { useMemo } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as Haptics from 'expo-haptics';
-import {
-  calculatePlates,
-  formatDuration,
-  fromKg,
-  previousSets,
-  toKg,
-  type Exercise,
-  type SetKind,
-  type Workout,
-  type WorkoutExercise,
-  type WorkoutSet,
-} from '@open-workouts/shared';
+import { formatDuration, suggestNextTemplate, templateLastDone, weeklyGoal } from '@open-workouts/shared';
 import { useNav } from '../nav';
-import { usePrefs, useStore, type Prefs } from '../state';
-import {
-  Button,
-  Card,
-  Chips,
-  H2,
-  IconButton,
-  Input,
-  NumInput,
-  Pill,
-  Screen,
-  SearchInput,
-  Sheet,
-  T,
-  label,
-  relativeDay,
-  showWeight,
-  styles,
-  useTheme,
-} from '../ui';
+import { usePrefs, useStore } from '../state';
+import { Button, Card, Eyebrow, H2, Pill, Screen, T, relativeDay, showWeight, styles, useTheme } from '../ui';
 import { useDialog } from '../dialog';
+import { ExerciseAvatar, ExercisePicker, KIND_LABEL, SetBadge } from '../workoutParts';
+import { ActiveWorkout } from './ActiveWorkout';
+import { APP_VERSION, useUpdate } from '../update';
+import { HeaderActions } from '../ProfileButton';
 
 export function WorkoutScreen() {
   const store = useStore();
@@ -49,14 +22,33 @@ function StartScreen() {
   const store = useStore();
   const nav = useNav();
   const theme = useTheme();
+  const dialog = useDialog();
   const templates = store.all('templates').sort((a, b) => a.position - b.position);
   const folders = store.all('templateFolders').sort((a, b) => a.position - b.position);
   const groups = [{ id: null as string | null, name: 'My templates' }, ...folders];
-  const finished = store.all('workouts').filter((w) => w.endedAt != null);
-  const lastDone = (templateId: string) =>
-    finished.filter((w) => w.templateId === templateId).reduce((m, w) => Math.max(m, w.startedAt), 0);
+  const { lastDone, next, lastWorkout } = useMemo(() => {
+    const tds = { ...store.dataset, templates: store.all('templates') };
+    const finished = store.dataset.workouts.filter((w) => w.endedAt != null).sort((a, b) => b.startedAt - a.startedAt);
+    return { lastDone: templateLastDone(tds), next: suggestNextTemplate(tds), lastWorkout: finished[0] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.version]);
+  const lastExercises = lastWorkout ? store.workoutExercises(lastWorkout.id).length : 0;
+  // "Repeat" is for workouts that aren't a template (by id, or by name for imported ones); templates start from their card.
+  const isTemplated = (w: { name: string; templateId: string | null }) =>
+    (!!w.templateId && !!store.get('templates', w.templateId)) || templates.some((t) => t.name.trim().toLowerCase() === w.name.trim().toLowerCase());
+  const showRepeat = !!lastWorkout && lastExercises > 0 && !isTemplated(lastWorkout);
+  const newTemplate = async () => {
+    const name = await dialog.prompt({ title: 'New template', placeholder: 'Template name, e.g. Push Day', confirmText: 'Create' });
+    if (!name) return;
+    const tpl = store.createTemplate(name);
+    nav.push({ name: 'templateEdit', id: tpl.id });
+  };
   return (
-    <Screen title="Train" subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}>
+    <Screen
+      title="Train"
+      subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+      right={<HeaderActions />}
+    >
       <Pressable
         onPress={() => store.startWorkout()}
         accessibilityRole="button"
@@ -71,16 +63,61 @@ function StartScreen() {
           <Ionicons name="play" size={22} color={theme.accent} style={{ marginLeft: 3 }} />
         </View>
       </Pressable>
+      <UpdateBanner />
+      <WeekGoal />
+      {next && (
+        <Card>
+          <View style={styles.rowBetween}>
+            {/* Only the text opens the template, so Start stays its own button for screen readers. */}
+            <Pressable
+              style={{ flex: 1 }}
+              onPress={() => nav.push({ name: 'templateDetail', id: next.id })}
+              accessibilityRole="button"
+              accessibilityLabel={`Up next: ${next.name}. Show template`}
+            >
+              <Text style={{ color: theme.accentText, fontSize: 12, fontWeight: '800', letterSpacing: 0.6 }}>UP NEXT</Text>
+              <T bold style={{ fontSize: 17, marginTop: 2 }}>
+                {next.name}
+              </T>
+              <T small muted>
+                Last done {relativeDay(lastDone.get(next.id) ?? 0)} · {store.templateExercises(next.id).length} exercises
+              </T>
+            </Pressable>
+            <Button small variant="soft" icon="play" title="Start" onPress={() => store.startWorkout({ templateId: next.id })} />
+          </View>
+        </Card>
+      )}
+      {showRepeat && lastWorkout && (
+        <Card>
+          <View style={styles.rowBetween}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '800', letterSpacing: 0.6 }}>REPEAT LAST WORKOUT</Text>
+              <T bold style={{ fontSize: 17, marginTop: 2 }} lines={1}>
+                {lastWorkout.name}
+              </T>
+              <T small muted>
+                {relativeDay(lastWorkout.startedAt)} · {lastExercises} exercise{lastExercises === 1 ? '' : 's'}
+              </T>
+            </View>
+            <Button small icon="repeat" title="Repeat" onPress={() => store.repeatWorkout(lastWorkout.id)} />
+          </View>
+        </Card>
+      )}
+      <H2 right={<Button small variant="ghost" icon="add" title="New template" onPress={newTemplate} />}>Templates</H2>
       {groups.map((g) => {
         const list = templates.filter((t) => t.folderId === g.id);
         if (!list.length) return null;
         return (
           <View key={g.id ?? 'root'}>
-            <H2 right={<Pill text={String(list.length)} tone="neutral" />}>{g.name}</H2>
+            {(folders.length > 0 || g.id) && (
+              <Eyebrow>
+                {g.name} · {list.length}
+              </Eyebrow>
+            )}
             {list.map((t) => {
               const tes = store.all('templateExercises').filter((x) => x.templateId === t.id).sort((a, b) => a.position - b.position);
               const names = tes.map((te) => store.get('exercises', te.exerciseId)?.name).filter(Boolean) as string[];
-              const last = lastDone(t.id);
+              const last = lastDone.get(t.id) ?? 0;
               return (
                 // Opens a preview of the whole template; the workout starts from there.
                 <Card key={t.id} onPress={() => nav.push({ name: 'templateDetail', id: t.id })}>
@@ -105,10 +142,71 @@ function StartScreen() {
       })}
       {!templates.length && (
         <T muted style={{ marginTop: 16 }}>
-          Finish a workout and save it as a template to see it here. Templates can also be edited in the web UI.
+          No templates yet. Tap New template to build one, or save a finished workout as a template.
         </T>
       )}
     </Screen>
+  );
+}
+
+function UpdateBanner() {
+  const prefs = usePrefs();
+  const t = useTheme();
+  const { update, dismiss } = useUpdate(prefs.checkUpdates);
+  if (!update) return null;
+  return (
+    <Card style={{ borderWidth: 1, borderColor: t.accent }}>
+      <View style={styles.rowBetween}>
+        <Ionicons name="arrow-up-circle" size={26} color={t.accentText} />
+        <View style={{ flex: 1 }}>
+          <T bold>Version {update.version} is available</T>
+          <T small muted>
+            You have {APP_VERSION}. See what's new and download it on GitHub.
+          </T>
+        </View>
+      </View>
+      <View style={[styles.row, { marginTop: 8, justifyContent: 'flex-end' }]}>
+        <Button small variant="ghost" title="Not now" onPress={dismiss} />
+        <Button small variant="primary" icon="open-outline" title="Get update" onPress={() => void Linking.openURL(update.url)} />
+      </View>
+    </Card>
+  );
+}
+
+/** "2 of 3 this week" with a dot per workout, and the streak of weeks that hit the goal. Tap to change the goal. */
+function WeekGoal() {
+  const store = useStore();
+  const prefs = usePrefs();
+  const dialog = useDialog();
+  const t = useTheme();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const g = useMemo(() => weeklyGoal(store.dataset, prefs.weeklyGoal), [store.version, prefs.weeklyGoal]);
+  const done = g.thisWeek >= g.goal;
+  const change = async () => {
+    const v = await dialog.menu({
+      title: 'Weekly goal',
+      message: 'How many workouts a week do you want to aim for?',
+      options: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ text: `${n === g.goal ? '✓ ' : ''}${n} workout${n === 1 ? '' : 's'} a week`, value: String(n) })),
+    });
+    if (v) store.setSetting('prefs', { ...prefs, weeklyGoal: Number(v) });
+  };
+  return (
+    <Card onPress={change}>
+      <View style={styles.rowBetween}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: t.muted, fontSize: 12, fontWeight: '800', letterSpacing: 0.6 }}>THIS WEEK</Text>
+          <T bold style={{ fontSize: 17, marginTop: 2 }}>
+            {done ? `Goal reached · ${g.thisWeek} of ${g.goal}` : `${g.thisWeek} of ${g.goal} workouts`}
+          </T>
+        </View>
+        {g.streak > 0 && <Pill icon="flame" text={`${g.streak} week${g.streak === 1 ? '' : 's'}`} />}
+      </View>
+      <View style={[styles.row, { gap: 6, marginTop: 10 }]} accessibilityLabel={`${g.thisWeek} of ${g.goal} workouts this week. Tap to change the goal.`}>
+        {Array.from({ length: Math.max(g.goal, g.thisWeek) }, (_, i) => (
+          <View key={i} style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: i < g.thisWeek ? t.accent : t.surface2 }} />
+        ))}
+      </View>
+    </Card>
   );
 }
 
@@ -137,10 +235,8 @@ export function TemplateDetailScreen({ id }: { id: string }) {
       .sort((a, b) => a.position - b.position);
   const totalSets = tes.reduce((n, te) => n + setsOf(te.id).length, 0);
   const folder = tpl.folderId ? store.get('templateFolders', tpl.folderId)?.name : null;
-  const last = store
-    .all('workouts')
-    .filter((w) => w.templateId === id && w.endedAt != null)
-    .sort((a, b) => b.startedAt - a.startedAt)[0];
+  const lastAt = templateLastDone({ ...store.dataset, templates: store.all('templates') }).get(id) ?? 0;
+  const last = lastAt ? { startedAt: lastAt } : undefined;
   const active = store.activeWorkout();
   const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
   const describe = (s: { weight: number | null; reps: number | null; distance: number | null; duration: number | null }) => {
@@ -168,7 +264,7 @@ export function TemplateDetailScreen({ id }: { id: string }) {
           <Pill icon="time-outline" text={last ? `Last done ${relativeDay(last.startedAt)}` : 'Not done yet'} />
         </View>
         {tpl.notes ? <T style={{ marginTop: 8 }}>{tpl.notes}</T> : null}
-        {tes.length === 0 && <T muted style={{ marginTop: 12 }}>This template has no exercises yet. Add them in the web UI.</T>}
+        {tes.length === 0 && <T muted style={{ marginTop: 12 }}>This template has no exercises yet. Tap Edit to add some.</T>}
         {tes.map((te) => {
           const ex = store.get('exercises', te.exerciseId);
           let n = 0;
@@ -205,14 +301,7 @@ export function TemplateDetailScreen({ id }: { id: string }) {
           );
         })}
         <View style={[styles.row, { marginTop: 8 }]}>
-          <Button
-            title="Rename"
-            variant="ghost"
-            onPress={async () => {
-              const name = await dialog.prompt({ title: 'Rename template', defaultValue: tpl.name, placeholder: 'Template name' });
-              if (name) store.update('templates', id, { name });
-            }}
-          />
+          <Button title="Edit template" icon="create-outline" onPress={() => nav.push({ name: 'templateEdit', id })} />
           <Button
             title="Delete template"
             variant="danger"
@@ -245,585 +334,13 @@ export function TemplateDetailScreen({ id }: { id: string }) {
   );
 }
 
-function useNow() {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return now;
-}
-
-export function ActiveWorkout({ workout, editing = false, onDone }: { workout: Workout; editing?: boolean; onDone?: () => void }) {
-  useKeepAwake();
-  const store = useStore();
-  const prefs = usePrefs();
-  const nav = useNav();
-  const t = useTheme();
-  const dialog = useDialog();
-  const now = useNow();
-  const [picking, setPicking] = useState(false);
-  const [rest, setRest] = useState<{ until: number; total: number } | null>(null);
-  const wexs = store.workoutExercises(workout.id);
-
-  useEffect(() => {
-    if (rest && now >= rest.until) {
-      setRest(null);
-      Vibration.vibrate([0, 300, 150, 300]);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-  }, [now, rest]);
-
-  const finish = async () => {
-    const sets = store.all('sets').filter((s) => s.workoutId === workout.id);
-    const done = sets.filter((s) => s.completed).length;
-    if (!done) {
-      // Finishing would save an empty workout: offer to keep going or throw it away instead.
-      const discard = await dialog.confirm({
-        title: 'Nothing logged yet',
-        message: 'Tap ✓ next to each set you finish. A workout with no completed sets is not saved.',
-        cancelText: 'Keep logging',
-        confirmText: 'Discard',
-        destructive: true,
-      });
-      if (discard) store.deleteWorkout(workout.id);
-      return;
-    }
-    const incomplete = sets.length - done;
-    if (
-      incomplete &&
-      !(await dialog.confirm({
-        title: 'Finish workout?',
-        message: `${incomplete} unticked set${incomplete === 1 ? '' : 's'} will be left out.`,
-        cancelText: 'Keep logging',
-        confirmText: 'Finish',
-      }))
-    )
-      return;
-    store.finishWorkout(workout.id);
-    nav.switchTab('history');
-    nav.push({ name: 'workoutDetail', id: workout.id });
-  };
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Screen>
-        <View style={[styles.rowBetween, { marginTop: 4 }]}>
-          {editing ? (
-            <Pill icon="create-outline" text="Editing" tone="neutral" />
-          ) : (
-            <View style={styles.row}>
-              <View style={[local.liveDot, { backgroundColor: t.accent }]} />
-              <Text style={{ color: t.text, fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] }} accessibilityLabel="Elapsed time">
-                {formatDuration((now - workout.startedAt) / 1000)}
-              </Text>
-            </View>
-          )}
-          {editing ? (
-            <Button title="Done" variant="primary" small onPress={() => onDone?.()} />
-          ) : (
-            <Button title="Finish" icon="flag" variant="primary" small onPress={finish} />
-          )}
-        </View>
-        <Input
-          value={workout.name}
-          onChangeText={(v) => store.update('workouts', workout.id, { name: v.replace(/\n/g, ' ') })}
-          // Multiline so long names wrap instead of scrolling out of view on narrow phones.
-          multiline
-          submitBehavior="blurAndSubmit"
-          accessibilityLabel="Workout name"
-          style={local.titleInput}
-        />
-        <Input
-          placeholder="Add workout notes…"
-          value={workout.notes ?? ''}
-          multiline
-          onChangeText={(v) => store.update('workouts', workout.id, { notes: v || null })}
-          style={{ backgroundColor: t.surface }}
-        />
-        {wexs.map((we) => (
-          <ExerciseBlock
-            key={we.id}
-            we={we}
-            workout={workout}
-            prefs={prefs}
-            editing={editing}
-            onCompleted={(secs) => {
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              if (secs > 0 && !editing) setRest({ until: Date.now() + secs * 1000, total: secs });
-            }}
-          />
-        ))}
-        <Button title="Add exercise" icon="add" variant="soft" onPress={() => setPicking(true)} style={{ marginTop: 8 }} />
-        {!editing && (
-          <Button
-            title="Cancel workout"
-            variant="danger"
-            onPress={async () => {
-              const ok = await dialog.confirm({
-                title: 'Discard workout?',
-                message: 'Everything logged in this workout is deleted. This cannot be undone.',
-                cancelText: 'Keep',
-                confirmText: 'Discard',
-                destructive: true,
-              });
-              if (ok) store.deleteWorkout(workout.id);
-            }}
-          />
-        )}
-      </Screen>
-
-      {rest && (
-        <View style={[local.restBar, { backgroundColor: t.surface, borderColor: t.border }]}>
-          {/* The tint drains from right to left as the rest runs out. */}
-          <View style={[local.restProgress, { backgroundColor: t.accentSoft, width: `${Math.max(0, ((rest.until - now) / (rest.total * 1000)) * 100)}%` }]} />
-          <View>
-            <Text style={{ color: t.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>REST</Text>
-            <Text style={{ color: t.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
-              {formatDuration(Math.max(0, (rest.until - now) / 1000))}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Button small title="−15" onPress={() => setRest({ ...rest, until: rest.until - 15_000 })} />
-            <Button small title="+15" onPress={() => setRest({ until: rest.until + 15_000, total: rest.total + 15 })} />
-            <Button small title="Skip" variant="primary" onPress={() => setRest(null)} />
-          </View>
-        </View>
-      )}
-
-      <ExercisePicker
-        visible={picking}
-        onClose={() => setPicking(false)}
-        onPick={(e) => {
-          store.addExerciseToWorkout(workout.id, e.id);
-          setPicking(false);
-        }}
-      />
-    </View>
-  );
-}
-
-const KIND_LABEL: Record<SetKind, string> = { normal: '', warmup: 'W', drop: 'D', failure: 'F' };
-
-function ExerciseBlock({
-  we,
-  workout,
-  prefs,
-  editing,
-  onCompleted,
-}: {
-  we: WorkoutExercise;
-  workout: Workout;
-  prefs: Prefs;
-  editing: boolean;
-  onCompleted: (restSeconds: number) => void;
-}) {
-  const store = useStore();
-  const nav = useNav();
-  const t = useTheme();
-  const dialog = useDialog();
-  const [plates, setPlates] = useState(false);
-  const ex = store.get('exercises', we.exerciseId);
-  const sets = store.setsOf(we.id);
-  const prev = useMemo(
-    () => previousSets(store.dataset, we.exerciseId, workout.startedAt).filter((s) => s.kind !== 'warmup'),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [store.version, we.exerciseId, workout.startedAt],
-  );
-  if (!ex) return null;
-  const lt = ex.logType;
-  const pinned = store.pinnedNote(ex.id);
-  const editNote = async () => {
-    const v = await dialog.prompt({
-      title: we.notes ? 'Edit note' : 'Add note',
-      message: 'For this workout only. It shows in the workout summary in History.',
-      defaultValue: we.notes ?? '',
-      placeholder: 'How did it feel?',
-      multiline: true,
-      allowEmpty: !!we.notes,
-    });
-    if (v != null) store.update('workoutExercises', we.id, { notes: v || null });
-  };
-  const editPinned = async () => {
-    const v = await dialog.prompt({
-      title: pinned ? 'Edit pinned note' : 'Pin a note',
-      message: `Shows on ${ex.name} every time you do it. Good for seat settings, grip or cues.`,
-      defaultValue: pinned ?? '',
-      placeholder: 'e.g. Seat on 4, pause at the bottom',
-      multiline: true,
-      allowEmpty: !!pinned,
-    });
-    if (v != null) store.setPinnedNote(ex.id, v || null);
-  };
-  const hasWeight = lt === 'weight_reps' || lt === 'weighted_bodyweight' || lt === 'assisted_bodyweight';
-  const hasReps = lt !== 'duration' && lt !== 'distance_duration';
-  const hasDistance = lt === 'distance_duration';
-  const hasDuration = lt === 'duration' || lt === 'distance_duration';
-  const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
-  let n = 0;
-
-  return (
-    <Card>
-      <View style={styles.rowBetween}>
-        <Pressable onPress={() => nav.push({ name: 'exerciseDetail', id: ex.id })} style={{ flex: 1 }} accessibilityRole="link">
-          <Text style={{ color: t.text, fontWeight: '800', fontSize: 17, letterSpacing: -0.2 }}>{ex.name}</Text>
-          <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600', marginTop: 1 }}>
-            {sets.filter((x) => x.completed).length}/{sets.length} sets done
-          </Text>
-        </Pressable>
-        {/* Plates only make sense for a loaded bar, not dumbbells, cables or machines. */}
-        {lt === 'weight_reps' && (ex.equipment === 'barbell' || ex.equipment === 'smith_machine') && (
-          <IconButton name="calculator-outline" label="Plate calculator" onPress={() => setPlates(true)} />
-        )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`More options for ${ex.name}`}
-          hitSlop={10}
-          style={local.more}
-          onPress={async () => {
-            const choice = await dialog.menu({
-              title: ex.name,
-              options: [
-                { text: we.notes ? 'Edit note' : 'Add note', value: 'note' },
-                { text: pinned ? 'Edit pinned note' : 'Pin a note', value: 'pin' },
-                { text: 'History & records', value: 'history' },
-                { text: 'Remove exercise', value: 'remove', destructive: true },
-              ],
-            });
-            if (choice === 'note') return void editNote();
-            if (choice === 'pin') return void editPinned();
-            if (choice === 'history') nav.push({ name: 'exerciseDetail', id: ex.id });
-            if (choice !== 'remove') return;
-            const logged = sets.filter((s) => s.completed).length;
-            if (
-              logged &&
-              !(await dialog.confirm({
-                title: `Remove ${ex.name}?`,
-                message: `${logged} completed set${logged === 1 ? '' : 's'} will be deleted.`,
-                confirmText: 'Remove',
-                destructive: true,
-              }))
-            )
-              return;
-            store.removeWorkoutExercise(we.id);
-          }}
-        >
-          <Ionicons name="ellipsis-horizontal" size={20} color={t.muted} />
-        </Pressable>
-      </View>
-      {pinned && (
-        <Pressable
-          onPress={editPinned}
-          accessibilityRole="button"
-          accessibilityLabel={`Pinned note: ${pinned}. Tap to edit.`}
-          style={[local.note, { backgroundColor: t.accentSoft }]}
-        >
-          <Ionicons name="pin" size={14} color={t.accentText} style={local.noteIcon} />
-          <T small style={{ flex: 1 }}>
-            {pinned}
-          </T>
-        </Pressable>
-      )}
-      {we.notes ? (
-        <Pressable
-          onPress={editNote}
-          accessibilityRole="button"
-          accessibilityLabel={`Note: ${we.notes}. Tap to edit.`}
-          style={[local.note, { backgroundColor: t.surface2 }]}
-        >
-          <Ionicons name="chatbox-ellipses-outline" size={14} color={t.muted} style={local.noteIcon} />
-          <T small muted style={{ flex: 1 }}>
-            {we.notes}
-          </T>
-        </Pressable>
-      ) : null}
-      <View style={[styles.row, local.headRow]}>
-        <Text style={[local.head, local.cSet, { color: t.muted, textAlign: 'center' }]} numberOfLines={1}>
-          SET
-        </Text>
-        <Text style={[local.head, local.cPrev, { color: t.muted }]} numberOfLines={1}>
-          PREVIOUS
-        </Text>
-        {hasWeight && (
-          <Text style={[local.head, local.cNum, { color: t.muted }]}>
-            {lt === 'assisted_bodyweight' ? '−' : lt === 'weighted_bodyweight' ? '+' : ''}
-            {prefs.weightUnit.toUpperCase()}
-          </Text>
-        )}
-        {hasDistance && <Text style={[local.head, local.cNum, { color: t.muted }]}>{prefs.distanceUnit.toUpperCase()}</Text>}
-        {hasDuration && <Text style={[local.head, local.cNum, { color: t.muted }]}>SEC</Text>}
-        {hasReps && <Text style={[local.head, local.cNum, { color: t.muted }]}>REPS</Text>}
-        <View style={local.cCheck} />
-      </View>
-      {sets.map((s) => {
-        const idx = s.kind === 'warmup' ? -1 : n++;
-        const p = idx >= 0 ? prev[idx] : undefined;
-        const prevText = !p
-          ? '—'
-          : hasWeight
-            ? `${showWeight(p.weight, prefs)}×${p.reps ?? 0}`
-            : hasDistance
-              ? `${((p.distance ?? 0) / dist).toFixed(1)}`
-              : hasDuration
-                ? formatDuration(p.duration)
-                : `${p.reps ?? 0}`;
-        return (
-          <SetRow
-            key={s.id}
-            s={s}
-            label={KIND_LABEL[s.kind] || String(idx + 1)}
-            prevText={prevText}
-            onUsePrev={p ? () => store.update('sets', s.id, { weight: p.weight, reps: p.reps, distance: p.distance, duration: p.duration }) : undefined}
-            prefs={prefs}
-            cols={{ hasWeight, hasReps, hasDistance, hasDuration }}
-            onCompleted={() => onCompleted(we.restSeconds ?? prefs.restSeconds)}
-            editing={editing}
-          />
-        );
-      })}
-      <Button small title="Add set" icon="add" onPress={() => store.addSet(we.id)} style={{ marginTop: 10 }} />
-      {plates && <PlateModal prefs={prefs} kg={sets.find((s) => !s.completed)?.weight ?? sets[0]?.weight ?? 60} onClose={() => setPlates(false)} />}
-    </Card>
-  );
-}
-
-function SetRow({
-  s,
-  label: setLabel,
-  prevText,
-  onUsePrev,
-  prefs,
-  cols,
-  onCompleted,
-  editing,
-}: {
-  s: WorkoutSet;
-  label: string;
-  prevText: string;
-  onUsePrev?: () => void;
-  prefs: Prefs;
-  cols: { hasWeight: boolean; hasReps: boolean; hasDistance: boolean; hasDuration: boolean };
-  onCompleted: () => void;
-  editing: boolean;
-}) {
-  const store = useStore();
-  const t = useTheme();
-  const dialog = useDialog();
-  const up = (patch: Partial<WorkoutSet>) => store.update('sets', s.id, patch);
-  const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
-  // Fields on a ticked row blend into the tinted row instead of sitting in grey boxes.
-  const numStyle = [local.cNum, s.completed && { backgroundColor: 'transparent' }];
-  // Tapping the set number opens a menu (set type, delete) instead of silently cycling the type.
-  const openMenu = async () => {
-    const mark = (k: SetKind, text: string) => ({ text: s.kind === k ? `✓ ${text}` : text, value: k });
-    const choice = await dialog.menu({
-      title: `Set ${setLabel}`,
-      options: [
-        mark('normal', 'Normal set'),
-        mark('warmup', 'Warm-up'),
-        mark('drop', 'Drop set'),
-        mark('failure', 'Failure'),
-        { text: 'Delete set', value: 'delete', destructive: true },
-      ],
-    });
-    if (choice === 'delete') store.remove('sets', s.id);
-    else if (choice) up({ kind: choice });
-  };
-  return (
-    <View style={[styles.row, local.setRow]}>
-      {/* A separate layer rather than a background on the row: Android drops the corner radius when a background is added after mount. */}
-      {s.completed && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.doneRow, borderRadius: 12 }]} />}
-      <Pressable
-        style={local.cSet}
-        onPress={openMenu}
-        onLongPress={openMenu}
-        accessibilityRole="button"
-        accessibilityLabel={`Set ${setLabel} options`}
-        hitSlop={6}
-      >
-        <SetBadge kind={s.kind} text={setLabel} />
-      </Pressable>
-      <Pressable style={local.cPrev} onPress={onUsePrev} accessibilityLabel={onUsePrev ? `Use previous: ${prevText}` : undefined}>
-        <T small muted lines={1}>
-          {prevText}
-        </T>
-      </Pressable>
-      {cols.hasWeight && (
-        <NumInput
-          style={numStyle}
-          value={s.weight == null ? null : +fromKg(s.weight, prefs.weightUnit).toFixed(2)}
-          onChange={(v) => up({ weight: v == null ? null : toKg(v, prefs.weightUnit) })}
-        />
-      )}
-      {cols.hasDistance && (
-        <NumInput style={numStyle} value={s.distance == null ? null : +(s.distance / dist).toFixed(3)} onChange={(v) => up({ distance: v == null ? null : v * dist })} />
-      )}
-      {cols.hasDuration && <NumInput style={numStyle} value={s.duration} onChange={(v) => up({ duration: v })} />}
-      {cols.hasReps && <NumInput style={numStyle} value={s.reps} onChange={(v) => up({ reps: v == null ? null : Math.round(v) })} />}
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: s.completed }}
-        accessibilityLabel={`Set ${setLabel} done`}
-        style={[local.cCheck, local.check, { backgroundColor: s.completed ? t.accent : t.surface2 }]}
-        onPress={() => {
-          if (!s.completed) Keyboard.dismiss(); // ticking a set means you are done typing it
-          up({ completed: !s.completed });
-          if (!s.completed && !editing) onCompleted();
-        }}
-      >
-        <Ionicons name="checkmark" size={20} color={s.completed ? t.onAccent : t.muted} />
-      </Pressable>
-    </View>
-  );
-}
-
-function PlateModal({ prefs, kg, onClose }: { prefs: Prefs; kg: number; onClose: () => void }) {
-  const t = useTheme();
-  const [target, setTarget] = useState<number | null>(+fromKg(kg, prefs.weightUnit).toFixed(2));
-  const bar = +fromKg(prefs.barWeightKg, prefs.weightUnit).toFixed(2);
-  const r = calculatePlates(target ?? 0, bar, prefs.weightUnit === 'kg' ? [25, 20, 15, 10, 5, 2.5, 1.25] : [45, 35, 25, 10, 5, 2.5]);
-  return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={local.backdrop} onPress={onClose}>
-        <Pressable style={[local.sheet, { backgroundColor: t.surface }]}>
-          <H2>Plate calculator</H2>
-          <T muted>Target ({prefs.weightUnit})</T>
-          <NumInput value={target} onChange={setTarget} />
-          <T muted small>
-            Bar {bar} {prefs.weightUnit}
-          </T>
-          <View style={[styles.row, { minHeight: 90, flexWrap: 'wrap' }]}>
-            {r.perSide.map((p, i) => (
-              <View key={i} style={{ width: 30, height: 30 + p * 1.6, backgroundColor: t.accent, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: t.onAccent, fontSize: 11, fontWeight: '800' }}>{p}</Text>
-              </View>
-            ))}
-          </View>
-          <T>Per side: {r.perSide.join(' + ') || 'just the bar'}</T>
-          {r.remainder > 0 && (
-            <T small style={{ color: t.danger }}>
-              Closest: {r.achieved} {prefs.weightUnit}
-            </T>
-          )}
-          <Button title="Close" onPress={onClose} />
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
-export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean; onClose: () => void; onPick: (e: Exercise) => void }) {
-  const store = useStore();
-  const t = useTheme();
-  const [q, setQ] = useState('');
-  const [part, setPart] = useState('all');
-  const all = store.exercises();
-  const parts = ['all', ...new Set(all.map((e) => e.bodyPart))];
-  const list = all.filter((e) => (part === 'all' || e.bodyPart === part) && e.name.toLowerCase().includes(q.trim().toLowerCase()));
-  return (
-    <Sheet visible={visible} onClose={onClose}>
-      <View style={{ flex: 1, paddingHorizontal: 16 }}>
-        <View style={styles.rowBetween}>
-          <H2>Add exercise</H2>
-          <Button small variant="ghost" title="Close" onPress={onClose} />
-        </View>
-        <SearchInput placeholder="Search exercises" value={q} onChangeText={setQ} />
-        <Chips options={parts.map((p) => ({ value: p, label: label(p) }))} value={part} onChange={setPart} />
-        <FlatList
-          data={list}
-          keyExtractor={(e) => e.id}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => onPick(item)}
-              style={({ pressed }) => [local.pickRow, pressed && { backgroundColor: t.surface2 }]}
-              accessibilityRole="button"
-            >
-              <ExerciseAvatar name={item.name} />
-              <View style={{ flex: 1 }}>
-                <T bold>{item.name}</T>
-                <T small muted>
-                  {label(item.bodyPart)}
-                </T>
-              </View>
-              <Ionicons name="add-circle" size={24} color={t.accentText} />
-            </Pressable>
-          )}
-        />
-      </View>
-    </Sheet>
-  );
-}
-
-/** Set number (or W/D/F) in a small rounded badge, coloured by set type. */
-export function SetBadge({ kind, text }: { kind: SetKind; text: string }) {
-  const t = useTheme();
-  const fg = { normal: t.text, warmup: t.warn, drop: t.accentText, failure: t.danger }[kind];
-  return (
-    <View style={[local.badge, { backgroundColor: kind === 'drop' ? t.accentSoft : t.surface2 }]}>
-      <Text style={{ color: fg, fontWeight: '800', fontSize: 13, fontVariant: ['tabular-nums'] }}>{text}</Text>
-    </View>
-  );
-}
-
-/** Initials in a tinted circle, so long exercise lists are easier to scan. */
-export function ExerciseAvatar({ name }: { name: string }) {
-  const t = useTheme();
-  const initials = name
-    .replace(/\(.*?\)/g, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('');
-  return (
-    <View style={[local.avatar, { backgroundColor: t.accentSoft }]}>
-      <Text style={{ color: t.accentText, fontWeight: '800', fontSize: 14 }}>{initials}</Text>
-    </View>
-  );
-}
+export { ActiveWorkout, ExerciseAvatar, ExercisePicker, SetBadge };
 
 const local = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 24, padding: 20, marginTop: 6, marginBottom: 4 },
   heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, marginBottom: 2 },
   heroIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  liveDot: { width: 8, height: 8, borderRadius: 4 },
-  titleInput: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6, backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 2 },
-  headRow: { marginTop: 12, paddingHorizontal: 4 },
-  head: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
-  setRow: { paddingVertical: 4, paddingHorizontal: 4, borderRadius: 12, marginTop: 4 },
-  badge: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  avatar: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  // Number columns flex (capped) so a full row still fits a 320pt-wide phone with larger text.
-  cSet: { width: 28 },
-  cPrev: { flex: 1.2, minWidth: 0 },
-  cNum: { flex: 1, minWidth: 0, maxWidth: 72, textAlign: 'center', borderRadius: 10 },
-  cCheck: { width: 42 },
-  check: { height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  restBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 22,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-  },
-  restProgress: { position: 'absolute', left: 0, top: 0, bottom: 0 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
-  sheet: { borderRadius: 24, padding: 20 },
-  more: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8 },
   noteIcon: { marginTop: 2 },
   startBar: { padding: 12, paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth },
-  pickRow: { paddingVertical: 10, paddingHorizontal: 6, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

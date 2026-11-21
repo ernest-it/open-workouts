@@ -8,16 +8,17 @@ import { ExercisesPage } from './pages/Exercises';
 import { MeasurementsPage, ProfilePage } from './pages/Profile';
 import { SettingsPage } from './pages/Settings';
 import { InsightsPage } from './pages/Insights';
+import { Icon, type IconName } from './icons';
 
-const TABS = [
-  ['profile', 'Profile', '👤'],
-  ['history', 'History', '🕘'],
-  ['workout', 'Workout', '＋'],
-  ['exercises', 'Exercises', '🏋'],
-  ['measure', 'Measure', '📏'],
-  ['insights', 'Insights', '✨'],
-  ['settings', 'Settings', '⚙'],
-] as const;
+const TABS: [string, string, IconName][] = [
+  ['profile', 'Profile', 'user'],
+  ['history', 'History', 'clock'],
+  ['workout', 'Workout', 'plus'],
+  ['exercises', 'Exercises', 'barbell'],
+  ['measure', 'Measure', 'ruler'],
+  ['insights', 'Insights', 'sparkles'],
+  ['settings', 'Settings', 'settings'],
+];
 
 export function App() {
   const [auth, setAuth] = useState<Auth | null>(loadAuth);
@@ -61,7 +62,9 @@ function Shell({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
         <span className="brand">Open Workouts</span>
         {TABS.map(([key, name, icon]) => (
           <a key={key} href={`#/${key}`} className={section === key ? 'on' : ''}>
-            <span className="icon">{icon}</span>
+            <span className="icon">
+              <Icon name={icon} size={20} />
+            </span>
             <span className="tab-name">{name}</span>
             {key === 'workout' && active && <span className="dot-live" />}
           </a>

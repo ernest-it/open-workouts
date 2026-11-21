@@ -150,7 +150,7 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
     return (
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]} accessibilityViewIsModal>
         <Pressable style={local.menuBackdrop} onPress={() => close(d.cancelValue)} accessibilityLabel="Close menu">
-          <Pressable style={[local.sheet, { backgroundColor: t.surface, paddingBottom: insets.bottom + 8 }]}>
+          <Pressable accessible={false} style={[local.sheet, { backgroundColor: t.surface, paddingBottom: insets.bottom + 8 }]}>
             <View style={[local.grabber, { backgroundColor: t.border }]} />
             <Text style={[local.title, { color: t.text, textAlign: 'center' }]}>{d.title}</Text>
             {d.message ? <Text style={[local.message, { color: t.muted, textAlign: 'center' }]}>{d.message}</Text> : null}

@@ -9,6 +9,7 @@ import {
   exerciseRecords,
   exerciseSeries,
   formatDuration,
+  formatNumber,
   fromKg,
   type BodyPart,
   type Equipment,
@@ -18,6 +19,8 @@ import { useNav } from '../nav';
 import { usePrefs, useStore } from '../state';
 import { Button, Card, Chips, H2, Input, Screen, SearchInput, Segmented, Sheet, T, Title, formatDate, label, showWeight, styles, useTheme } from '../ui';
 import { ExerciseAvatar } from './Workout';
+import { HeaderActions } from '../ProfileButton';
+import { LineChart, RANGES, inRange, type Range } from '../chart';
 import { useDialog } from '../dialog';
 
 export function ExercisesScreen() {
@@ -35,7 +38,14 @@ export function ExercisesScreen() {
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {/* Same width cap and header style as the other tabs (see Screen in ui.tsx). */}
       <View style={[styles.sheetBody, { paddingHorizontal: 16, paddingTop: 12 }]}>
-      <Title title="Exercises" right={<Button small variant="primary" icon="add" title="New" onPress={() => setCreating(true)} />} />
+      <Title
+        title="Exercises"
+        right={
+          <HeaderActions>
+            <Button small variant="primary" icon="add" title="New" onPress={() => setCreating(true)} />
+          </HeaderActions>
+        }
+      />
       <SearchInput placeholder={`Search ${store.exercises().length} exercises`} value={q} onChangeText={setQ} />
       <Chips options={['all', ...BODY_PARTS].map((p) => ({ value: p, label: label(p) }))} value={part} onChange={setPart} />
       <FlatList
@@ -120,6 +130,8 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
   const nav = useNav();
   const t = useTheme();
   const [tab, setTab] = useState<'records' | 'history' | 'chart'>('records');
+  const [metric, setMetric] = useState<Metric>('best1RM');
+  const [range, setRange] = useState<Range>('3m');
   const ex = store.get('exercises', id);
   const ds = store.dataset;
   const rec = useMemo(() => (ex ? exerciseRecords(ds, ex) : null), [ds, ex]);
@@ -133,8 +145,12 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
     );
   const w = (kg?: number) => (kg == null ? '—' : `${showWeight(kg, prefs)} ${prefs.weightUnit}`);
   const weighted = ex.logType === 'weight_reps' || ex.logType === 'weighted_bodyweight';
-  const points = series.map((p) => (weighted ? fromKg(p.best1RM, prefs.weightUnit) : p.maxReps)).filter((v) => v > 0);
-  const max = Math.max(1, ...points);
+  const key = weighted ? metric : 'maxReps';
+  const points = inRange(
+    series.map((p) => ({ at: p.at, value: key === 'maxReps' ? p[key] : fromKg(p[key], prefs.weightUnit) })).filter((p) => p.value > 0),
+    range,
+  );
+  const fmt = (v: number) => (key === 'maxReps' ? `${Math.round(v)} reps` : `${formatNumber(v, key === 'volume' ? 0 : 1)} ${prefs.weightUnit}`);
 
   return (
     <Screen title={ex.name} subtitle={`${label(ex.bodyPart)} · ${label(ex.equipment)}`}>
@@ -206,31 +222,27 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
         ))}
       {tab === 'chart' && (
         <Card>
-          <T muted small>
-            {weighted ? `Best set, estimated 1RM (${prefs.weightUnit})` : 'Max reps'} per session
+          {weighted && <Chips options={METRICS} value={metric} onChange={setMetric} />}
+          <T muted small style={{ marginBottom: 6 }}>
+            {METRICS.find((m) => m.value === (weighted ? metric : 'maxReps'))!.long} per session
           </T>
-          {points.length < 2 ? (
-            <T muted>Not enough data yet.</T>
-          ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 160, gap: 2, marginTop: 8 }}>
-              {points.slice(-40).map((v, i, arr) => (
-                <View
-                  key={i}
-                  style={{ flex: 1, height: `${(v / max) * 100}%`, borderRadius: 4, backgroundColor: v === max || i === arr.length - 1 ? t.accent : t.accentSoft }}
-                />
-              ))}
-            </View>
-          )}
-          {points.length >= 2 && (
-            <T small muted>
-              Latest {+points[points.length - 1]!.toFixed(1)} · best {+max.toFixed(1)}
-            </T>
-          )}
+          <LineChart points={points} label={METRICS.find((m) => m.value === (weighted ? metric : 'maxReps'))!.long} format={fmt} />
+          <View style={{ marginTop: 10 }}>
+            <Segmented options={RANGES} value={range} onChange={setRange} />
+          </View>
         </Card>
       )}
     </Screen>
   );
 }
+
+type Metric = 'best1RM' | 'maxWeight' | 'volume' | 'maxReps';
+const METRICS: { value: Metric; label: string; long: string }[] = [
+  { value: 'best1RM', label: 'Est. 1RM', long: 'Estimated 1RM of the best set' },
+  { value: 'maxWeight', label: 'Top weight', long: 'Heaviest weight' },
+  { value: 'volume', label: 'Volume', long: 'Total volume' },
+  { value: 'maxReps', label: 'Reps', long: 'Most reps in a set' },
+];
 
 function Row({ k, v }: { k: string; v: string }) {
   return (

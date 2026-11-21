@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { normalizeServerUrl, type Account } from '../state';
 import { Button, Card, Input, Screen, T, useTheme } from '../ui';
 
-/** First-run screen: connect to a self-hosted server, or use the app locally. */
+/** First-run screen: start using the app on this phone, or connect a self-hosted server. */
 export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
   const t = useTheme();
   const [url, setUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showServer, setShowServer] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<{ registrationOpen: boolean; version: string } | null>(null);
 
@@ -53,10 +55,36 @@ export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <Screen title="Open Workouts">
-        <T muted>Track your training on your own server. Your phone keeps working offline and syncs when it can reach it.</T>
+      <Screen>
+        <View style={{ alignItems: 'center', marginTop: 36, marginBottom: 8 }}>
+          <Image source={require('../../assets/icon.png')} style={{ width: 88, height: 88, borderRadius: 22 }} accessibilityIgnoresInvertColors />
+          <Text style={{ color: t.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.6, marginTop: 16 }}>Open Workouts</Text>
+          <T muted style={{ textAlign: 'center', marginTop: 4, paddingHorizontal: 12 }}>
+            Log your lifts, follow your progress, and keep your data. No account needed.
+          </T>
+        </View>
+        {[
+          ['barbell-outline', 'Fast logging with rest timer, supersets and PRs'],
+          ['trending-up-outline', 'Charts, records and weekly goals'],
+          ['lock-closed-outline', 'Everything stays on this phone unless you add a server'],
+        ].map(([icon, text]) => (
+          <View key={text} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6, paddingHorizontal: 8 }}>
+            <Ionicons name={icon as 'barbell-outline'} size={20} color={t.accentText} />
+            <T style={{ flex: 1 }}>{text}</T>
+          </View>
+        ))}
+        <Button title="Start on this phone" icon="arrow-forward" variant="primary" style={{ marginTop: 16 }} onPress={() => onDone({ server: null })} />
+        <T small muted style={{ textAlign: 'center', marginTop: 6 }}>
+          You can connect a server later in Settings, and back up to a file any time.
+        </T>
+        {!showServer ? (
+          <Button title="I have a server" icon="server-outline" variant="ghost" style={{ marginTop: 12 }} onPress={() => setShowServer(true)} />
+        ) : (
         <Card style={{ marginTop: 16 }}>
           <T bold>Server address</T>
+          <T small muted>
+            Self-host the Open Workouts server to sync between devices and use the web app. The phone keeps working offline and syncs when it can reach it.
+          </T>
           <Input
             value={url}
             onChangeText={(v) => {
@@ -89,7 +117,7 @@ export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
             </T>
           )}
         </Card>
-        <Button title="Use without a server (local only)" variant="ghost" onPress={() => onDone({ server: null })} />
+        )}
       </Screen>
     </KeyboardAvoidingView>
   );

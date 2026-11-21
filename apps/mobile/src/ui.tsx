@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { buildTheme, fromKg, type ThemeColors } from '@open-workouts/shared';
+import { buildTheme, formatNumber, fromKg, type ThemeColors } from '@open-workouts/shared';
 import type { Prefs } from './state';
 import { useAppearance } from './appearance';
 
@@ -104,7 +104,7 @@ export function Card({ children, style, onPress }: { children: ReactNode; style?
   const t = useTheme();
   const s = [styles.card, { backgroundColor: t.surface, borderColor: t.border, borderWidth: t.dark ? StyleSheet.hairlineWidth : 0 }, style];
   return onPress ? (
-    <Pressable onPress={onPress} style={({ pressed }) => [s, pressed && { transform: [{ scale: 0.985 }], opacity: 0.85 }]}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [s, pressed && { transform: [{ scale: 0.985 }], opacity: 0.85 }]}>
       {children}
     </Pressable>
   ) : (
@@ -227,12 +227,16 @@ export function NumInput({
   style,
   placeholder,
   accessibilityLabel,
+  onFocus,
+  onBlur,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
   style?: StyleProp<TextStyle>;
   placeholder?: string;
   accessibilityLabel?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }) {
   const [text, setText] = useState(value == null ? '' : String(value));
   useEffect(() => {
@@ -245,6 +249,8 @@ export function NumInput({
       value={text}
       placeholder={placeholder}
       accessibilityLabel={accessibilityLabel}
+      onFocus={onFocus}
+      onBlur={onBlur}
       keyboardType="decimal-pad"
       returnKeyType="done"
       inputAccessoryViewID={Platform.OS === 'ios' ? NUMPAD_ACCESSORY : undefined}
@@ -445,6 +451,8 @@ export function ListRow({
 
 export const label = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 export const showWeight = (kg: number | null | undefined, prefs: Prefs) => (kg == null ? '' : String(+fromKg(kg, prefs.weightUnit).toFixed(2)));
+/** A total (volume) with thousands separators: "8,087.5". */
+export const showVolume = (kg: number, prefs: Prefs) => formatNumber(fromKg(kg, prefs.weightUnit), 1);
 export const formatDate = (ms: number) =>
   new Date(ms).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 

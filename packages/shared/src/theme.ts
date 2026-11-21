@@ -13,7 +13,7 @@ export interface Appearance {
   accent: string;
 }
 
-export const DEFAULT_APPEARANCE: Appearance = { mode: 'system', accent: 'ember' };
+export const DEFAULT_APPEARANCE: Appearance = { mode: 'black', accent: 'mint' };
 
 export const THEME_MODES: { value: ThemeMode; label: string }[] = [
   { value: 'system', label: 'Auto' },
@@ -30,10 +30,10 @@ export interface AccentPreset {
 }
 
 export const ACCENT_PRESETS: AccentPreset[] = [
+  { id: 'mint', name: 'Mint', color: '#2ee6a6' },
   { id: 'ember', name: 'Ember', color: '#ff5b2e' },
   { id: 'volt', name: 'Volt', color: '#b6f22e' },
   { id: 'grape', name: 'Grape', color: '#8b5cf6' },
-  { id: 'mint', name: 'Mint', color: '#14c79b' },
   { id: 'rose', name: 'Rose', color: '#f43f72' },
   { id: 'sun', name: 'Sun', color: '#ffb31f' },
   { id: 'ocean', name: 'Ocean', color: '#2f7bf6' },

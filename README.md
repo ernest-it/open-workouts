@@ -16,10 +16,10 @@ The model is the fast "templates → live workout → history and PRs" loop that
   - **Your own assistant:** Claude Desktop, Claude Code or another AI assistant can read your log through the built-in MCP server.
 
 <p align="center">
-  <img src="docs/screenshots/android/03-active-workout.png" width="200" alt="Live workout">
-  <img src="docs/screenshots/android/07-workout-detail.png" width="200" alt="Workout with PRs">
-  <img src="docs/screenshots/android/10-exercise-chart.png" width="200" alt="Progress chart">
-  <img src="docs/screenshots/android/dark-history.png" width="200" alt="History in dark mode">
+  <img src="docs/screenshots/android/01-train.png" width="200" alt="Train tab with weekly goal">
+  <img src="docs/screenshots/android/02-active-workout.png" width="200" alt="Live workout with a new PR">
+  <img src="docs/screenshots/android/09-exercise-chart.png" width="200" alt="Progress chart">
+  <img src="docs/screenshots/android/11-muscle-map.png" width="200" alt="Muscle map">
 </p>
 
 <p align="center"><a href="docs/SCREENSHOTS.md">More screenshots: every screen of the app and the web UI</a></p>
@@ -28,13 +28,14 @@ The model is the fast "templates → live workout → history and PRs" loop that
 
 | | |
 |---|---|
-| **Live workout logging** | "Previous" column, warm-up/drop/failure sets, RPE, notes, auto-starting rest timer, plate calculator, warm-up calculator |
-| **Templates** | Unlimited, with folders; save any workout as a template |
+| **Live workout logging** | Values pre-filled from last time, ± steppers, warm-up/drop/failure sets, RPE, notes, supersets, reorder and replace exercises, swipe to delete, PR alerts as you lift, rest timer that keeps running in the background, plate and warm-up calculators |
+| **Templates** | Unlimited, with folders; build and edit them on the phone or the web; save or update one from a workout; suggested next template and repeat last workout |
 | **Records** | Estimated 1RM (Brzycki), max weight, max set and session volume, rep records 1–12 with predictions, PR badges per set |
-| **History & charts** | Calendar, per-workout summaries, per-exercise history and progress charts, workouts per week |
-| **Measurements** | Body weight, body fat, calories, 15 body circumferences |
+| **History & progress** | Calendar and search, per-workout summaries, a finish screen comparing with last time, progress charts with time ranges, weekly goal and streak (with a reminder before it breaks), a body map of sets per muscle |
+| **Measurements** | Body weight, body fat, calories, 15 body circumferences, with charts |
 | **Exercises** | 185 built-in, plus custom exercises (weight × reps, ± bodyweight, reps only, duration, cardio) |
 | **AI insights** | Weekly reports with ntfy/Discord notifications, workout comparisons, Q&A, plateau detection; Claude or local LLMs; MCP server for your own assistant. See [docs/AI_INSIGHTS.md](docs/AI_INSIGHTS.md) |
+| **Your data** | Works fully offline on the phone with no account; automatic daily backups on the phone; full backup and restore; sync status always visible |
 | **Multi-user** | Accounts, per-device tokens you can revoke, API tokens, first user becomes admin |
 
 ## Quick start

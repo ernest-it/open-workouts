@@ -4,32 +4,31 @@ Demo data: 10 weeks of an upper/lower split, imported from a Strong CSV export. 
 
 ## Mobile app (Android)
 
-### Logging a workout
+Shown in the default look, Black with Mint. Settings → Appearance has Light, Dark and Black, eight colours or any custom colour.
 
-| Start from a template | Live workout | Rest timer & plate calculator | Add exercise |
+### Training
+
+| Train: weekly goal and up next | Live workout with a new PR | Rest timer | Finished |
 |---|---|---|---|
-| ![Start workout](screenshots/android/02-start-workout.png) | ![Active workout](screenshots/android/03-active-workout.png) | ![Plate calculator](screenshots/android/04-plate-calculator.png) | ![Exercise picker](screenshots/android/05-exercise-picker.png) |
+| ![Train](screenshots/android/01-train.png) | ![Active workout](screenshots/android/02-active-workout.png) | ![Rest timer](screenshots/android/03-rest-timer.png) | ![Workout complete](screenshots/android/04-workout-done.png) |
 
 ### History and progress
 
-| History | Workout with PRs | Exercise records | Progress chart |
+| History | Calendar | Exercise records | Progress chart |
 |---|---|---|---|
-| ![History](screenshots/android/06-history.png) | ![Workout detail](screenshots/android/07-workout-detail.png) | ![Exercise records](screenshots/android/09-exercise-records.png) | ![Exercise chart](screenshots/android/10-exercise-chart.png) |
+| ![History](screenshots/android/05-history.png) | ![Calendar](screenshots/android/06-history-calendar.png) | ![Exercise records](screenshots/android/08-exercise-records.png) | ![Exercise chart](screenshots/android/09-exercise-chart.png) |
 
-### Exercises, profile and themes
+### Profile, templates and settings
 
-| Exercise library | Profile & measurements | Appearance settings | Black mode, Volt colour |
+| Profile | Muscle map | Template editor | Settings and themes |
 |---|---|---|---|
-| ![Exercises](screenshots/android/08-exercises.png) | ![Profile](screenshots/android/11-profile.png) | ![Settings](screenshots/android/12-settings.png) | ![Themes](screenshots/android/13-themes.png) |
+| ![Profile](screenshots/android/10-profile.png) | ![Muscle map](screenshots/android/11-muscle-map.png) | ![Template editor](screenshots/android/13-template-editor.png) | ![Settings](screenshots/android/12-settings.png) |
 
-### Dark mode
+### Light mode
 
-Shown in the default Ember colour. Settings → Appearance has eight colours or any custom colour, in Light, Dark or Black.
-
-
-| Live workout | History | Profile | Progress chart |
+| Train | History | Muscle map | Settings |
 |---|---|---|---|
-| ![Dark workout](screenshots/android/dark-active-workout.png) | ![Dark history](screenshots/android/dark-history.png) | ![Dark profile](screenshots/android/dark-profile.png) | ![Dark chart](screenshots/android/dark-exercise-chart.png) |
+| ![Light train](screenshots/android/light-train.png) | ![Light history](screenshots/android/light-history.png) | ![Light muscle map](screenshots/android/light-muscle-map.png) | ![Light settings](screenshots/android/light-settings.png) |
 
 ## Web UI
 
@@ -65,6 +64,6 @@ Served by the same container at `http://<host>:8080`.
 **Sign in**
 ![Web sign in](screenshots/web/01-sign-in.png)
 
-**Dark mode**
-![Web dark history](screenshots/web/dark-history.png)
-![Web dark exercise records](screenshots/web/dark-exercise-records.png)
+**Light mode**
+![Web light history](screenshots/web/light-history.png)
+![Web light exercise records](screenshots/web/light-exercise-records.png)
