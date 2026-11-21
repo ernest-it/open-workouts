@@ -24,9 +24,16 @@ export function WorkoutPage() {
   if (!active) {
     return (
       <div className="page">
-        <h1>Start Workout</h1>
-        <button className="primary block" onClick={() => store.startWorkout()}>
-          Start an empty workout
+        <h1 className="with-sub">Train</h1>
+        <p className="subtitle">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+        <button className="hero" onClick={() => store.startWorkout()} aria-label="Start an empty workout">
+          <span>
+            <strong>Quick start</strong>
+            <span>Empty workout. Add exercises as you go.</span>
+          </span>
+          <span className="hero-icon" aria-hidden>
+            ▶
+          </span>
         </button>
         <Templates />
       </div>

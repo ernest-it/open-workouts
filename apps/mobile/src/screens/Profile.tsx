@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -16,7 +17,8 @@ import {
   type MeasurementKind,
 } from '@open-workouts/shared';
 import { usePrefs, useStore, type Account, type Prefs } from '../state';
-import { Button, Card, Chips, H2, IconButton, NumInput, Screen, T, formatDate, label, styles, useTheme } from '../ui';
+import { Button, Card, Chips, Eyebrow, H2, IconButton, NumInput, Screen, Segmented, T, formatDate, label, styles, useTheme, type IconName } from '../ui';
+import { AppearanceCard } from './Appearance';
 import { useDialog } from '../dialog';
 
 export function ProfileScreen({ account }: { account: Account }) {
@@ -25,25 +27,49 @@ export function ProfileScreen({ account }: { account: Account }) {
   const t = useTheme();
   const weeks = useMemo(() => workoutsPerWeek(store.dataset, 12), [store.dataset]);
   const max = Math.max(1, ...weeks.map((w) => w.count));
-  const total = store.all('workouts').filter((w) => w.endedAt != null).length;
+  const finished = store.all('workouts').filter((w) => w.endedAt != null);
+  const total = finished.length;
+  const thisWeek = weeks[weeks.length - 1]?.count ?? 0;
+  const avg = weeks.length ? weeks.reduce((n, w) => n + w.count, 0) / weeks.length : 0;
+  // Consecutive weeks (ending this week or last week) with at least one workout.
+  let streak = 0;
+  for (let i = weeks.length - 1 - (thisWeek ? 0 : 1); i >= 0 && weeks[i]!.count > 0; i--) streak++;
   return (
-    <Screen title={account.server?.username ?? 'Profile'}>
-      <T muted>
-        {total} workout{total === 1 ? '' : 's'}
-      </T>
+    <Screen title={account.server?.username ?? 'Profile'} subtitle={account.server ? 'Synced with your server' : 'Local-only mode'}>
+      <View style={[styles.row, { gap: 10, marginTop: 4 }]}>
+        <StatTile icon="barbell" value={String(total)} caption="Workouts" />
+        <StatTile icon="flame" value={String(streak)} caption={`Week streak`} />
+        <StatTile icon="calendar" value={String(thisWeek)} caption="This week" />
+      </View>
       <Card>
-        <T bold>Workouts per week</T>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 110, gap: 4, marginTop: 8 }}>
-          {weeks.map((w) => (
-            <View key={w.weekStart} style={{ flex: 1, height: `${(w.count / max) * 100}%`, minHeight: 2, backgroundColor: t.accent, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
+        <View style={styles.rowBetween}>
+          <T bold style={{ fontSize: 16 }}>
+            Workouts per week
+          </T>
+          <T small muted>
+            avg {avg.toFixed(1)}
+          </T>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 6, marginTop: 14 }}>
+          {weeks.map((w, i) => (
+            <View
+              key={w.weekStart}
+              style={{
+                flex: 1,
+                height: `${(w.count / max) * 100}%`,
+                minHeight: 6,
+                borderRadius: 6,
+                backgroundColor: i === weeks.length - 1 ? t.accent : w.count ? t.accentSoft : t.surface2,
+              }}
+            />
           ))}
         </View>
-        <View style={[styles.rowBetween, { marginTop: 4 }]}>
+        <View style={[styles.rowBetween, { marginTop: 6 }]}>
           <T small muted>
             {weeks.length} weeks ago
           </T>
           <T small muted>
-            This week: {weeks[weeks.length - 1]?.count ?? 0}
+            This week
           </T>
         </View>
       </Card>
@@ -67,6 +93,7 @@ function Measurements({ prefs }: { prefs: Prefs }) {
     <View>
       <H2>Measurements</H2>
       <Chips options={MEASUREMENT_KINDS.map((k) => ({ value: k, label: label(k) }))} value={kind} onChange={setKind} />
+      <Card>
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <NumInput value={value} onChange={setValue} placeholder={`New ${label(kind).toLowerCase()}`} accessibilityLabel={`New ${label(kind)} value in ${unit}`} />
@@ -74,6 +101,8 @@ function Measurements({ prefs }: { prefs: Prefs }) {
         <T muted>{unit}</T>
         <Button
           title="Add"
+          icon="add"
+          small
           variant="primary"
           disabled={value == null}
           onPress={() => {
@@ -82,9 +111,14 @@ function Measurements({ prefs }: { prefs: Prefs }) {
           }}
         />
       </View>
+      {list.length === 0 && (
+        <T small muted style={{ marginTop: 8 }}>
+          Nothing logged yet.
+        </T>
+      )}
       {list.slice(0, 20).map((m) => (
-        <View key={m.id} style={[styles.rowBetween, { paddingVertical: 6 }]}>
-          <T>
+        <View key={m.id} style={[styles.rowBetween, { paddingVertical: 4 }]}>
+          <T bold style={{ fontVariant: ['tabular-nums'] }}>
             {show(m.value)} {unit}
           </T>
           <T small muted>
@@ -104,6 +138,7 @@ function Measurements({ prefs }: { prefs: Prefs }) {
           />
         </View>
       ))}
+      </Card>
     </View>
   );
 }
@@ -112,7 +147,8 @@ export function SettingsScreen({ account, onSignOut }: { account: Account; onSig
   const store = useStore();
   const prefs = usePrefs();
   const dialog = useDialog();
-  const setPref = (p: Partial<Prefs>) => store.setSetting('prefs', { ...prefs, ...p });
+  const t = useTheme();
+  const setPref =(p: Partial<Prefs>) => store.setSetting('prefs', { ...prefs, ...p });
   const [importing, setImporting] = useState(false);
   const [importUnit, setImportUnit] = useState<'kg' | 'lb'>(prefs.weightUnit);
 
@@ -213,46 +249,68 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
 
   return (
     <Screen title="Settings">
+      <Eyebrow>Appearance</Eyebrow>
+      <AppearanceCard />
+
+      <Eyebrow style={{ marginTop: 18 }}>Training</Eyebrow>
       <Card>
-        <T bold>Units</T>
-        <View style={styles.rowBetween}>
-          <T muted>Weight</T>
-          <Chips options={[{ value: 'kg' as const, label: 'kg' }, { value: 'lb' as const, label: 'lb' }]} value={prefs.weightUnit} onChange={(v) => setPref({ weightUnit: v })} />
+        <View style={local.setting}>
+          <T style={{ flex: 1 }}>Weight</T>
+          <View style={{ width: 130 }}>
+            <Segmented options={[{ value: 'kg' as const, label: 'kg' }, { value: 'lb' as const, label: 'lb' }]} value={prefs.weightUnit} onChange={(v) => setPref({ weightUnit: v })} />
+          </View>
         </View>
-        <View style={styles.rowBetween}>
-          <T muted>Distance</T>
-          <Chips options={[{ value: 'km' as const, label: 'km' }, { value: 'mi' as const, label: 'mi' }]} value={prefs.distanceUnit} onChange={(v) => setPref({ distanceUnit: v })} />
+        <View style={local.setting}>
+          <T style={{ flex: 1 }}>Distance</T>
+          <View style={{ width: 130 }}>
+            <Segmented options={[{ value: 'km' as const, label: 'km' }, { value: 'mi' as const, label: 'mi' }]} value={prefs.distanceUnit} onChange={(v) => setPref({ distanceUnit: v })} />
+          </View>
         </View>
-        <T muted>Default rest timer (seconds)</T>
-        <NumInput value={prefs.restSeconds} onChange={(v) => setPref({ restSeconds: v ?? 0 })} />
-        <T muted>Bar weight ({prefs.weightUnit})</T>
-        <NumInput value={+fromKg(prefs.barWeightKg, prefs.weightUnit).toFixed(2)} onChange={(v) => setPref({ barWeightKg: toKg(v ?? 0, prefs.weightUnit) })} />
+        <View style={local.setting}>
+          <T style={{ flex: 1 }}>Rest timer (seconds)</T>
+          <NumInput value={prefs.restSeconds} onChange={(v) => setPref({ restSeconds: v ?? 0 })} style={{ width: 90 }} accessibilityLabel="Default rest timer in seconds" />
+        </View>
+        <View style={[local.setting, { marginBottom: 0 }]}>
+          <T style={{ flex: 1 }}>Bar weight ({prefs.weightUnit})</T>
+          <NumInput
+            value={+fromKg(prefs.barWeightKg, prefs.weightUnit).toFixed(2)}
+            onChange={(v) => setPref({ barWeightKg: toKg(v ?? 0, prefs.weightUnit) })}
+            style={{ width: 90 }}
+            accessibilityLabel={`Bar weight in ${prefs.weightUnit}`}
+          />
+        </View>
       </Card>
+
+      <Eyebrow style={{ marginTop: 18 }}>Your data</Eyebrow>
       <Card>
-        <T bold>Export</T>
-        <T small muted>
+        <T bold style={{ fontSize: 16 }}>Export</T>
+        <T small muted style={{ marginTop: 2, marginBottom: 8 }}>
           The backup has everything: workouts, templates, measurements and settings. Restore it here or on another device. The CSV has
           your workouts in Strong's format, for spreadsheets and other apps.
         </T>
-        <Button variant="primary" title={exporting === 'json' ? 'Preparing…' : 'Save full backup (.json)'} disabled={!!exporting} onPress={() => void exportFile('json')} />
-        <Button title={exporting === 'csv' ? 'Preparing…' : 'Export workouts (.csv)'} disabled={!!exporting} onPress={() => void exportFile('csv')} />
+        <Button variant="primary" icon="cloud-download-outline" title={exporting === 'json' ? 'Preparing…' : 'Save full backup (.json)'} disabled={!!exporting} onPress={() => void exportFile('json')} />
+        <Button icon="document-text-outline" title={exporting === 'csv' ? 'Preparing…' : 'Export workouts (.csv)'} disabled={!!exporting} onPress={() => void exportFile('csv')} />
       </Card>
       <Card>
-        <T bold>Import</T>
-        <T small muted>
+        <T bold style={{ fontSize: 16 }}>Import</T>
+        <T small muted style={{ marginTop: 2 }}>
           Restore a backup, or import a CSV from this app or from Strong (Settings → Export Strong Data). Workouts you already have are
           skipped, so importing the same file twice is safe.
         </T>
-        <View style={styles.rowBetween}>
+        <View style={[local.setting, { marginTop: 10 }]}>
           <T small muted style={{ flex: 1 }}>
             Strong files with no unit in the header are in
           </T>
-          <Chips options={[{ value: 'kg' as const, label: 'kg' }, { value: 'lb' as const, label: 'lb' }]} value={importUnit} onChange={setImportUnit} />
+          <View style={{ width: 110 }}>
+            <Segmented options={[{ value: 'kg' as const, label: 'kg' }, { value: 'lb' as const, label: 'lb' }]} value={importUnit} onChange={setImportUnit} />
+          </View>
         </View>
-        <Button title={importing ? 'Importing…' : 'Choose file'} disabled={importing} onPress={importFile} />
+        <Button variant="soft" icon="folder-open-outline" title={importing ? 'Importing…' : 'Choose file'} disabled={importing} onPress={importFile} />
       </Card>
+
+      <Eyebrow style={{ marginTop: 18 }}>Account</Eyebrow>
       <Card>
-        <T bold>Sync</T>
+        <T bold style={{ fontSize: 16 }}>Sync</T>
         {account.server ? (
           <>
             <T small muted>
@@ -262,12 +320,15 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
               {store.pendingCount()} pending · last sync {store.lastSyncAt ? new Date(store.lastSyncAt).toLocaleTimeString() : 'never'}
             </T>
             {store.lastSyncError && (
-              <T small style={{ color: '#dc2626' }}>
+              <T small style={{ color: t.danger }}>
                 {store.lastSyncError}
               </T>
             )}
             <Button
               title="Sync now"
+              icon="sync"
+              variant="soft"
+              style={{ marginTop: 8 }}
               onPress={() =>
                 void store
                   .sync()
@@ -283,7 +344,7 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
         )}
       </Card>
       <Card>
-        <T bold>About & license</T>
+        <T bold style={{ fontSize: 16 }}>About & license</T>
         <T small muted>
           Open Workouts is source-available under the PolyForm Noncommercial License 1.0.0: free for non-commercial use, changes and sharing;
           commercial use needs a separate license. Built with open-source libraries.
@@ -316,3 +377,24 @@ Pick a Strong CSV export, a CSV exported from Open Workouts, or an Open Workouts
     </Screen>
   );
 }
+
+function StatTile({ icon, value, caption }: { icon: IconName; value: string; caption: string }) {
+  const t = useTheme();
+  return (
+    <View style={[local.tile, { backgroundColor: t.surface, borderColor: t.border, borderWidth: t.dark ? StyleSheet.hairlineWidth : 0 }]}>
+      <View style={[local.tileIcon, { backgroundColor: t.accentSoft }]}>
+        <Ionicons name={icon} size={16} color={t.accentText} />
+      </View>
+      <Text style={{ color: t.text, fontSize: 24, fontWeight: '800', letterSpacing: -0.5, marginTop: 10 }}>{value}</Text>
+      <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+        {caption}
+      </Text>
+    </View>
+  );
+}
+
+const local = StyleSheet.create({
+  tile: { flex: 1, borderRadius: 20, padding: 14 },
+  tileIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  setting: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+});

@@ -17,7 +17,25 @@ import {
 } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore, type Prefs } from '../state';
-import { Button, Card, Chips, H2, Input, NumInput, Screen, Sheet, T, label, relativeDay, showWeight, styles, useTheme } from '../ui';
+import {
+  Button,
+  Card,
+  Chips,
+  H2,
+  IconButton,
+  Input,
+  NumInput,
+  Pill,
+  Screen,
+  SearchInput,
+  Sheet,
+  T,
+  label,
+  relativeDay,
+  showWeight,
+  styles,
+  useTheme,
+} from '../ui';
 import { useDialog } from '../dialog';
 
 export function WorkoutScreen() {
@@ -33,37 +51,52 @@ function StartScreen() {
   const theme = useTheme();
   const templates = store.all('templates').sort((a, b) => a.position - b.position);
   const folders = store.all('templateFolders').sort((a, b) => a.position - b.position);
-  const groups = [{ id: null as string | null, name: 'My Templates' }, ...folders];
+  const groups = [{ id: null as string | null, name: 'My templates' }, ...folders];
+  const finished = store.all('workouts').filter((w) => w.endedAt != null);
+  const lastDone = (templateId: string) =>
+    finished.filter((w) => w.templateId === templateId).reduce((m, w) => Math.max(m, w.startedAt), 0);
   return (
-    <Screen title="Start Workout">
-      <Button title="Start an empty workout" variant="primary" onPress={() => store.startWorkout()} />
+    <Screen title="Train" subtitle={new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}>
+      <Pressable
+        onPress={() => store.startWorkout()}
+        accessibilityRole="button"
+        accessibilityLabel="Start an empty workout"
+        style={({ pressed }) => [local.hero, { backgroundColor: theme.accent }, pressed && { opacity: 0.85, transform: [{ scale: 0.985 }] }]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={[local.heroTitle, { color: theme.onAccent }]}>Quick start</Text>
+          <Text style={{ color: theme.onAccent, opacity: 0.8, fontSize: 14 }}>Empty workout. Add exercises as you go.</Text>
+        </View>
+        <View style={[local.heroIcon, { backgroundColor: theme.onAccent }]}>
+          <Ionicons name="play" size={22} color={theme.accent} style={{ marginLeft: 3 }} />
+        </View>
+      </Pressable>
       {groups.map((g) => {
         const list = templates.filter((t) => t.folderId === g.id);
         if (!list.length) return null;
         return (
           <View key={g.id ?? 'root'}>
-            <H2>{g.name}</H2>
+            <H2 right={<Pill text={String(list.length)} tone="neutral" />}>{g.name}</H2>
             {list.map((t) => {
               const tes = store.all('templateExercises').filter((x) => x.templateId === t.id).sort((a, b) => a.position - b.position);
+              const names = tes.map((te) => store.get('exercises', te.exerciseId)?.name).filter(Boolean) as string[];
+              const last = lastDone(t.id);
               return (
                 // Opens a preview of the whole template; the workout starts from there.
                 <Card key={t.id} onPress={() => nav.push({ name: 'templateDetail', id: t.id })}>
                   <View style={styles.rowBetween}>
-                    <T bold style={{ flex: 1 }}>
+                    <T bold style={{ flex: 1, fontSize: 17 }}>
                       {t.name}
                     </T>
                     <Ionicons name="chevron-forward" size={18} color={theme.muted} />
                   </View>
-                  {tes.slice(0, 5).map((te) => (
-                    <T key={te.id} small muted lines={1}>
-                      {store.all('templateSets').filter((s) => s.templateExerciseId === te.id).length} × {store.get('exercises', te.exerciseId)?.name}
-                    </T>
-                  ))}
-                  {tes.length > 5 && (
-                    <T small muted>
-                      +{tes.length - 5} more
-                    </T>
-                  )}
+                  <T small muted lines={2} style={{ marginTop: 4, lineHeight: 19 }}>
+                    {names.length ? names.join(' · ') : 'No exercises yet'}
+                  </T>
+                  <View style={[styles.row, { marginTop: 10, gap: 6 }]}>
+                    <Pill icon="barbell-outline" text={`${tes.length} exercise${tes.length === 1 ? '' : 's'}`} tone="neutral" />
+                    <Pill icon="time-outline" text={last ? relativeDay(last) : 'Not done yet'} tone={last ? 'neutral' : 'accent'} />
+                  </View>
                 </Card>
               );
             })}
@@ -128,16 +161,12 @@ export function TemplateDetailScreen({ id }: { id: string }) {
   return (
     <View style={{ flex: 1 }}>
       <Screen title={tpl.name}>
-        <T muted>
-          {[
-            folder,
-            `${tes.length} exercise${tes.length === 1 ? '' : 's'}`,
-            `${totalSets} set${totalSets === 1 ? '' : 's'}`,
-            last ? `last done ${relativeDay(last.startedAt)}` : 'not done yet',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-        </T>
+        <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
+          {folder ? <Pill icon="folder-outline" text={folder} tone="neutral" /> : null}
+          <Pill icon="barbell-outline" text={`${tes.length} exercise${tes.length === 1 ? '' : 's'}`} tone="neutral" />
+          <Pill icon="layers-outline" text={`${totalSets} set${totalSets === 1 ? '' : 's'}`} tone="neutral" />
+          <Pill icon="time-outline" text={last ? `Last done ${relativeDay(last.startedAt)}` : 'Not done yet'} />
+        </View>
         {tpl.notes ? <T style={{ marginTop: 8 }}>{tpl.notes}</T> : null}
         {tes.length === 0 && <T muted style={{ marginTop: 12 }}>This template has no exercises yet. Add them in the web UI.</T>}
         {tes.map((te) => {
@@ -146,18 +175,14 @@ export function TemplateDetailScreen({ id }: { id: string }) {
           return (
             <Card key={te.id} onPress={ex ? () => nav.push({ name: 'exerciseDetail', id: ex.id }) : undefined}>
               <View style={styles.rowBetween}>
-                <T bold style={{ flex: 1 }}>
+                <T bold style={{ flex: 1, fontSize: 16 }}>
                   {ex?.name ?? 'Unknown exercise'}
                 </T>
-                {te.restSeconds ? (
-                  <T small muted>
-                    Rest {formatDuration(te.restSeconds)}
-                  </T>
-                ) : null}
+                {te.restSeconds ? <Pill icon="hourglass-outline" text={formatDuration(te.restSeconds)} tone="neutral" /> : null}
               </View>
               {ex && store.pinnedNote(ex.id) ? (
-                <View style={[styles.row, { gap: 6, alignItems: 'flex-start' }]}>
-                  <Ionicons name="pin" size={14} color={t.accent} style={{ marginTop: 2 }} />
+                <View style={[local.note, { backgroundColor: t.accentSoft }]}>
+                  <Ionicons name="pin" size={14} color={t.accentText} style={local.noteIcon} />
                   <T small style={{ flex: 1 }}>
                     {store.pinnedNote(ex.id)}
                   </T>
@@ -168,14 +193,14 @@ export function TemplateDetailScreen({ id }: { id: string }) {
                   {te.notes}
                 </T>
               ) : null}
-              {setsOf(te.id).map((s) => (
-                <View key={s.id} style={[styles.row, { paddingVertical: 2 }]}>
-                  <T bold style={{ width: 24, color: { normal: t.text, warmup: t.warn, drop: t.accent, failure: t.danger }[s.kind] }}>
-                    {KIND_LABEL[s.kind] || ++n}
-                  </T>
-                  <T>{describe(s)}</T>
-                </View>
-              ))}
+              <View style={{ marginTop: 6 }}>
+                {setsOf(te.id).map((s) => (
+                  <View key={s.id} style={[styles.row, { paddingVertical: 3 }]}>
+                    <SetBadge kind={s.kind} text={KIND_LABEL[s.kind] || String(++n)} />
+                    <T style={{ fontVariant: ['tabular-nums'] }}>{describe(s)}</T>
+                  </View>
+                ))}
+              </View>
             </Card>
           );
         })}
@@ -213,7 +238,7 @@ export function TemplateDetailScreen({ id }: { id: string }) {
             Finish or cancel your current workout first.
           </T>
         )}
-        <Button title="Start workout" variant="primary" disabled={!!active} onPress={start} />
+        <Button title="Start workout" icon="play" variant="primary" disabled={!!active} onPress={start} />
         </View>
       </View>
     </View>
@@ -283,30 +308,38 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
   return (
     <View style={{ flex: 1 }}>
       <Screen>
-        <View style={styles.rowBetween}>
-          <Input
-            value={workout.name}
-            onChangeText={(v) => store.update('workouts', workout.id, { name: v.replace(/\n/g, ' ') })}
-            // Multiline so long names wrap instead of scrolling out of view on narrow phones.
-            multiline
-            submitBehavior="blurAndSubmit"
-            accessibilityLabel="Workout name"
-            style={{ flex: 1, fontSize: 22, fontWeight: '700', borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0 }}
-          />
+        <View style={[styles.rowBetween, { marginTop: 4 }]}>
+          {editing ? (
+            <Pill icon="create-outline" text="Editing" tone="neutral" />
+          ) : (
+            <View style={styles.row}>
+              <View style={[local.liveDot, { backgroundColor: t.accent }]} />
+              <Text style={{ color: t.text, fontSize: 17, fontWeight: '700', fontVariant: ['tabular-nums'] }} accessibilityLabel="Elapsed time">
+                {formatDuration((now - workout.startedAt) / 1000)}
+              </Text>
+            </View>
+          )}
           {editing ? (
             <Button title="Done" variant="primary" small onPress={() => onDone?.()} />
           ) : (
-            <>
-              <T muted>{formatDuration((now - workout.startedAt) / 1000)}</T>
-              <Button title="Finish" variant="success" small onPress={finish} />
-            </>
+            <Button title="Finish" icon="flag" variant="primary" small onPress={finish} />
           )}
         </View>
         <Input
-          placeholder="Workout notes"
+          value={workout.name}
+          onChangeText={(v) => store.update('workouts', workout.id, { name: v.replace(/\n/g, ' ') })}
+          // Multiline so long names wrap instead of scrolling out of view on narrow phones.
+          multiline
+          submitBehavior="blurAndSubmit"
+          accessibilityLabel="Workout name"
+          style={local.titleInput}
+        />
+        <Input
+          placeholder="Add workout notes…"
           value={workout.notes ?? ''}
           multiline
           onChangeText={(v) => store.update('workouts', workout.id, { notes: v || null })}
+          style={{ backgroundColor: t.surface }}
         />
         {wexs.map((we) => (
           <ExerciseBlock
@@ -321,7 +354,7 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
             }}
           />
         ))}
-        <Button title="+ Add exercise" onPress={() => setPicking(true)} />
+        <Button title="Add exercise" icon="add" variant="soft" onPress={() => setPicking(true)} style={{ marginTop: 8 }} />
         {!editing && (
           <Button
             title="Cancel workout"
@@ -342,12 +375,18 @@ export function ActiveWorkout({ workout, editing = false, onDone }: { workout: W
 
       {rest && (
         <View style={[local.restBar, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <View style={[local.restProgress, { backgroundColor: t.accent, width: `${Math.max(0, ((rest.until - now) / (rest.total * 1000)) * 100)}%` }]} />
-          <T bold>Rest {formatDuration(Math.max(0, (rest.until - now) / 1000))}</T>
+          {/* The tint drains from right to left as the rest runs out. */}
+          <View style={[local.restProgress, { backgroundColor: t.accentSoft, width: `${Math.max(0, ((rest.until - now) / (rest.total * 1000)) * 100)}%` }]} />
+          <View>
+            <Text style={{ color: t.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>REST</Text>
+            <Text style={{ color: t.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] }}>
+              {formatDuration(Math.max(0, (rest.until - now) / 1000))}
+            </Text>
+          </View>
           <View style={styles.row}>
-            <Button small title="-15" onPress={() => setRest({ ...rest, until: rest.until - 15_000 })} />
+            <Button small title="−15" onPress={() => setRest({ ...rest, until: rest.until - 15_000 })} />
             <Button small title="+15" onPress={() => setRest({ until: rest.until + 15_000, total: rest.total + 15 })} />
-            <Button small title="Skip" onPress={() => setRest(null)} />
+            <Button small title="Skip" variant="primary" onPress={() => setRest(null)} />
           </View>
         </View>
       )}
@@ -426,12 +465,15 @@ function ExerciseBlock({
   return (
     <Card>
       <View style={styles.rowBetween}>
-        <Pressable onPress={() => nav.push({ name: 'exerciseDetail', id: ex.id })} style={{ flex: 1 }}>
-          <Text style={{ color: t.accent, fontWeight: '700', fontSize: 16 }}>{ex.name}</Text>
+        <Pressable onPress={() => nav.push({ name: 'exerciseDetail', id: ex.id })} style={{ flex: 1 }} accessibilityRole="link">
+          <Text style={{ color: t.text, fontWeight: '800', fontSize: 17, letterSpacing: -0.2 }}>{ex.name}</Text>
+          <Text style={{ color: t.muted, fontSize: 12, fontWeight: '600', marginTop: 1 }}>
+            {sets.filter((x) => x.completed).length}/{sets.length} sets done
+          </Text>
         </Pressable>
         {/* Plates only make sense for a loaded bar, not dumbbells, cables or machines. */}
         {lt === 'weight_reps' && (ex.equipment === 'barbell' || ex.equipment === 'smith_machine') && (
-          <Button small variant="ghost" title="Plates" onPress={() => setPlates(true)} />
+          <IconButton name="calculator-outline" label="Plate calculator" onPress={() => setPlates(true)} />
         )}
         <Pressable
           accessibilityRole="button"
@@ -474,16 +516,21 @@ function ExerciseBlock({
           onPress={editPinned}
           accessibilityRole="button"
           accessibilityLabel={`Pinned note: ${pinned}. Tap to edit.`}
-          style={[local.note, { backgroundColor: t.surface2 }]}
+          style={[local.note, { backgroundColor: t.accentSoft }]}
         >
-          <Ionicons name="pin" size={14} color={t.accent} style={local.noteIcon} />
+          <Ionicons name="pin" size={14} color={t.accentText} style={local.noteIcon} />
           <T small style={{ flex: 1 }}>
             {pinned}
           </T>
         </Pressable>
       )}
       {we.notes ? (
-        <Pressable onPress={editNote} accessibilityRole="button" accessibilityLabel={`Note: ${we.notes}. Tap to edit.`} style={local.note}>
+        <Pressable
+          onPress={editNote}
+          accessibilityRole="button"
+          accessibilityLabel={`Note: ${we.notes}. Tap to edit.`}
+          style={[local.note, { backgroundColor: t.surface2 }]}
+        >
           <Ionicons name="chatbox-ellipses-outline" size={14} color={t.muted} style={local.noteIcon} />
           <T small muted style={{ flex: 1 }}>
             {we.notes}
@@ -491,33 +538,21 @@ function ExerciseBlock({
         </Pressable>
       ) : null}
       <View style={[styles.row, local.headRow]}>
-        <T small muted style={local.cSet} lines={1}>
+        <Text style={[local.head, local.cSet, { color: t.muted, textAlign: 'center' }]} numberOfLines={1}>
           SET
-        </T>
-        <T small muted style={local.cPrev} lines={1}>
-          PREV
-        </T>
+        </Text>
+        <Text style={[local.head, local.cPrev, { color: t.muted }]} numberOfLines={1}>
+          PREVIOUS
+        </Text>
         {hasWeight && (
-          <T small muted style={local.cNum}>
-            {lt === 'assisted_bodyweight' ? '-' : lt === 'weighted_bodyweight' ? '+' : ''}
+          <Text style={[local.head, local.cNum, { color: t.muted }]}>
+            {lt === 'assisted_bodyweight' ? '−' : lt === 'weighted_bodyweight' ? '+' : ''}
             {prefs.weightUnit.toUpperCase()}
-          </T>
+          </Text>
         )}
-        {hasDistance && (
-          <T small muted style={local.cNum}>
-            {prefs.distanceUnit.toUpperCase()}
-          </T>
-        )}
-        {hasDuration && (
-          <T small muted style={local.cNum}>
-            SEC
-          </T>
-        )}
-        {hasReps && (
-          <T small muted style={local.cNum}>
-            REPS
-          </T>
-        )}
+        {hasDistance && <Text style={[local.head, local.cNum, { color: t.muted }]}>{prefs.distanceUnit.toUpperCase()}</Text>}
+        {hasDuration && <Text style={[local.head, local.cNum, { color: t.muted }]}>SEC</Text>}
+        {hasReps && <Text style={[local.head, local.cNum, { color: t.muted }]}>REPS</Text>}
         <View style={local.cCheck} />
       </View>
       {sets.map((s) => {
@@ -546,7 +581,7 @@ function ExerciseBlock({
           />
         );
       })}
-      <Button small title="+ Add set" onPress={() => store.addSet(we.id)} style={{ marginTop: 6 }} />
+      <Button small title="Add set" icon="add" onPress={() => store.addSet(we.id)} style={{ marginTop: 10 }} />
       {plates && <PlateModal prefs={prefs} kg={sets.find((s) => !s.completed)?.weight ?? sets[0]?.weight ?? 60} onClose={() => setPlates(false)} />}
     </Card>
   );
@@ -576,7 +611,8 @@ function SetRow({
   const dialog = useDialog();
   const up = (patch: Partial<WorkoutSet>) => store.update('sets', s.id, patch);
   const dist = prefs.distanceUnit === 'mi' ? 1609.344 : 1000;
-  const kindColor = { normal: t.text, warmup: t.warn, drop: t.accent, failure: t.danger }[s.kind];
+  // Fields on a ticked row blend into the tinted row instead of sitting in grey boxes.
+  const numStyle = [local.cNum, s.completed && { backgroundColor: 'transparent' }];
   // Tapping the set number opens a menu (set type, delete) instead of silently cycling the type.
   const openMenu = async () => {
     const mark = (k: SetKind, text: string) => ({ text: s.kind === k ? `✓ ${text}` : text, value: k });
@@ -594,7 +630,9 @@ function SetRow({
     else if (choice) up({ kind: choice });
   };
   return (
-    <View style={[styles.row, local.setRow, s.completed && { backgroundColor: t.doneRow }]}>
+    <View style={[styles.row, local.setRow]}>
+      {/* A separate layer rather than a background on the row: Android drops the corner radius when a background is added after mount. */}
+      {s.completed && <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.doneRow, borderRadius: 12 }]} />}
       <Pressable
         style={local.cSet}
         onPress={openMenu}
@@ -603,7 +641,7 @@ function SetRow({
         accessibilityLabel={`Set ${setLabel} options`}
         hitSlop={6}
       >
-        <Text style={{ color: kindColor, fontWeight: '700', textAlign: 'center' }}>{setLabel}</Text>
+        <SetBadge kind={s.kind} text={setLabel} />
       </Pressable>
       <Pressable style={local.cPrev} onPress={onUsePrev} accessibilityLabel={onUsePrev ? `Use previous: ${prevText}` : undefined}>
         <T small muted lines={1}>
@@ -612,26 +650,28 @@ function SetRow({
       </Pressable>
       {cols.hasWeight && (
         <NumInput
-          style={local.cNum}
+          style={numStyle}
           value={s.weight == null ? null : +fromKg(s.weight, prefs.weightUnit).toFixed(2)}
           onChange={(v) => up({ weight: v == null ? null : toKg(v, prefs.weightUnit) })}
         />
       )}
       {cols.hasDistance && (
-        <NumInput style={local.cNum} value={s.distance == null ? null : +(s.distance / dist).toFixed(3)} onChange={(v) => up({ distance: v == null ? null : v * dist })} />
+        <NumInput style={numStyle} value={s.distance == null ? null : +(s.distance / dist).toFixed(3)} onChange={(v) => up({ distance: v == null ? null : v * dist })} />
       )}
-      {cols.hasDuration && <NumInput style={local.cNum} value={s.duration} onChange={(v) => up({ duration: v })} />}
-      {cols.hasReps && <NumInput style={local.cNum} value={s.reps} onChange={(v) => up({ reps: v == null ? null : Math.round(v) })} />}
+      {cols.hasDuration && <NumInput style={numStyle} value={s.duration} onChange={(v) => up({ duration: v })} />}
+      {cols.hasReps && <NumInput style={numStyle} value={s.reps} onChange={(v) => up({ reps: v == null ? null : Math.round(v) })} />}
       <Pressable
-        accessibilityLabel="Complete set"
-        style={[local.cCheck, local.check, { backgroundColor: s.completed ? t.success : t.surface2 }]}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: s.completed }}
+        accessibilityLabel={`Set ${setLabel} done`}
+        style={[local.cCheck, local.check, { backgroundColor: s.completed ? t.accent : t.surface2 }]}
         onPress={() => {
           if (!s.completed) Keyboard.dismiss(); // ticking a set means you are done typing it
           up({ completed: !s.completed });
           if (!s.completed && !editing) onCompleted();
         }}
       >
-        <Ionicons name="checkmark" size={20} color={s.completed ? '#fff' : t.muted} />
+        <Ionicons name="checkmark" size={20} color={s.completed ? t.onAccent : t.muted} />
       </Pressable>
     </View>
   );
@@ -654,8 +694,8 @@ function PlateModal({ prefs, kg, onClose }: { prefs: Prefs; kg: number; onClose:
           </T>
           <View style={[styles.row, { minHeight: 90, flexWrap: 'wrap' }]}>
             {r.perSide.map((p, i) => (
-              <View key={i} style={{ width: 30, height: 30 + p * 1.6, backgroundColor: t.accent, borderRadius: 4, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{p}</Text>
+              <View key={i} style={{ width: 30, height: 30 + p * 1.6, backgroundColor: t.accent, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: t.onAccent, fontSize: 11, fontWeight: '800' }}>{p}</Text>
               </View>
             ))}
           </View>
@@ -687,20 +727,26 @@ export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean;
           <H2>Add exercise</H2>
           <Button small variant="ghost" title="Close" onPress={onClose} />
         </View>
-        <Input placeholder="Search" value={q} onChangeText={setQ} autoCorrect={false} />
+        <SearchInput placeholder="Search exercises" value={q} onChangeText={setQ} />
         <Chips options={parts.map((p) => ({ value: p, label: label(p) }))} value={part} onChange={setPart} />
         <FlatList
           data={list}
           keyExtractor={(e) => e.id}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
-            <Pressable onPress={() => onPick(item)} style={[local.pickRow, { borderColor: t.border }]} accessibilityRole="button">
-              <T bold style={{ flex: 1 }}>
-                {item.name}
-              </T>
-              <T small muted>
-                {label(item.bodyPart)}
-              </T>
+            <Pressable
+              onPress={() => onPick(item)}
+              style={({ pressed }) => [local.pickRow, pressed && { backgroundColor: t.surface2 }]}
+              accessibilityRole="button"
+            >
+              <ExerciseAvatar name={item.name} />
+              <View style={{ flex: 1 }}>
+                <T bold>{item.name}</T>
+                <T small muted>
+                  {label(item.bodyPart)}
+                </T>
+              </View>
+              <Ionicons name="add-circle" size={24} color={t.accentText} />
             </Pressable>
           )}
         />
@@ -709,23 +755,60 @@ export function ExercisePicker({ visible, onClose, onPick }: { visible: boolean;
   );
 }
 
+/** Set number (or W/D/F) in a small rounded badge, coloured by set type. */
+export function SetBadge({ kind, text }: { kind: SetKind; text: string }) {
+  const t = useTheme();
+  const fg = { normal: t.text, warmup: t.warn, drop: t.accentText, failure: t.danger }[kind];
+  return (
+    <View style={[local.badge, { backgroundColor: kind === 'drop' ? t.accentSoft : t.surface2 }]}>
+      <Text style={{ color: fg, fontWeight: '800', fontSize: 13, fontVariant: ['tabular-nums'] }}>{text}</Text>
+    </View>
+  );
+}
+
+/** Initials in a tinted circle, so long exercise lists are easier to scan. */
+export function ExerciseAvatar({ name }: { name: string }) {
+  const t = useTheme();
+  const initials = name
+    .replace(/\(.*?\)/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  return (
+    <View style={[local.avatar, { backgroundColor: t.accentSoft }]}>
+      <Text style={{ color: t.accentText, fontWeight: '800', fontSize: 14 }}>{initials}</Text>
+    </View>
+  );
+}
+
 const local = StyleSheet.create({
-  headRow: { marginTop: 8, paddingHorizontal: 4 },
-  setRow: { paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6, marginTop: 2 },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 24, padding: 20, marginTop: 6, marginBottom: 4 },
+  heroTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, marginBottom: 2 },
+  heroIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  titleInput: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6, backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 2 },
+  headRow: { marginTop: 12, paddingHorizontal: 4 },
+  head: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6 },
+  setRow: { paddingVertical: 4, paddingHorizontal: 4, borderRadius: 12, marginTop: 4 },
+  badge: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   // Number columns flex (capped) so a full row still fits a 320pt-wide phone with larger text.
   cSet: { width: 28 },
   cPrev: { flex: 1.2, minWidth: 0 },
-  cNum: { flex: 1, minWidth: 0, maxWidth: 72, textAlign: 'center' },
-  cCheck: { width: 40 },
-  check: { height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  cNum: { flex: 1, minWidth: 0, maxWidth: 72, textAlign: 'center', borderRadius: 10 },
+  cCheck: { width: 42 },
+  check: { height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   restBar: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 16,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -735,12 +818,12 @@ const local = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
   },
-  restProgress: { position: 'absolute', left: 0, bottom: 0, height: 3 },
+  restProgress: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
-  sheet: { borderRadius: 14, padding: 16 },
-  more: { paddingHorizontal: 8, paddingVertical: 2, marginLeft: 2 },
-  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 6 },
+  sheet: { borderRadius: 24, padding: 20 },
+  more: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, marginTop: 8 },
   noteIcon: { marginTop: 2 },
   startBar: { padding: 12, paddingHorizontal: 16, borderTopWidth: StyleSheet.hairlineWidth },
-  pickRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pickRow: { paddingVertical: 10, paddingHorizontal: 6, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

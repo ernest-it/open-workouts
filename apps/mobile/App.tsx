@@ -36,7 +36,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <DialogProvider>
-      <StatusBar style="auto" />
+      <ThemedStatusBar />
       <KeyboardFocusGuard />
       {loadError ? (
         <LoadError message={loadError} onRetry={() => setAttempt((n) => n + 1)} />
@@ -74,6 +74,11 @@ export default function App() {
   );
 }
 
+function ThemedStatusBar() {
+  const t = useTheme();
+  return <StatusBar style={t.dark ? 'light' : 'dark'} />;
+}
+
 function Center({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: t.bg }}>{children}</View>;
@@ -92,7 +97,7 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
       <Text style={{ color: t.text, fontSize: 17, fontWeight: '700', marginBottom: 8 }}>Could not open your data</Text>
       <Text style={{ color: t.muted, textAlign: 'center', marginHorizontal: 24, marginBottom: 16 }}>{message}</Text>
       <Pressable onPress={onRetry} accessibilityRole="button" style={{ padding: 12 }}>
-        <Text style={{ color: t.accent, fontSize: 16, fontWeight: '600' }}>Try again</Text>
+        <Text style={{ color: t.accentText, fontSize: 16, fontWeight: '600' }}>Try again</Text>
       </Pressable>
     </Center>
   );
@@ -160,8 +165,8 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
         {stack.length > 1 && (
           <Pressable onPress={pop} style={styles.back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Ionicons name="chevron-back" size={22} color={t.accent} style={{ marginLeft: -6 }} />
-              <Text style={{ color: t.accent, fontSize: 16 }}>Back</Text>
+              <Ionicons name="chevron-back" size={22} color={t.accentText} style={{ marginLeft: -6 }} />
+              <Text style={{ color: t.accentText, fontSize: 16, fontWeight: '600' }}>Back</Text>
             </View>
           </Pressable>
         )}
@@ -189,10 +194,12 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
             accessibilityRole="tab"
             accessibilityState={{ selected: tab === x.key }}
           >
-            <View>
-              <Ionicons name={tab === x.key ? x.iconOn : x.icon} size={24} color={tab === x.key ? t.accent : t.muted} />
+            {/* Material-style indicator: the selected icon sits in a tinted pill. */}
+            {/* Keyed so it remounts on selection: Android drops the corner radius when only the background changes. */}
+            <View key={tab === x.key ? 'on' : 'off'} style={[styles.tabPill, tab === x.key && { backgroundColor: t.accentSoft }]}>
+              <Ionicons name={tab === x.key ? x.iconOn : x.icon} size={22} color={tab === x.key ? t.accentText : t.muted} />
               {x.key === 'workout' && s.activeWorkout() && (
-                <View accessibilityLabel="Workout in progress" style={[styles.badge, { backgroundColor: t.success, borderColor: t.surface }]} />
+                <View accessibilityLabel="Workout in progress" style={[styles.badge, { backgroundColor: t.accent, borderColor: t.surface }]} />
               )}
             </View>
             {/* Six tabs share the width: keep labels on one line on 320pt phones / large text. */}
@@ -201,7 +208,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
               adjustsFontSizeToFit
               minimumFontScale={0.8}
               maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 11, color: tab === x.key ? t.accent : t.muted, fontWeight: tab === x.key ? '700' : '400' }}
+              style={{ fontSize: 11, marginTop: 2, color: tab === x.key ? t.text : t.muted, fontWeight: tab === x.key ? '700' : '500' }}
             >
               {x.label}
             </Text>
@@ -215,6 +222,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
 const styles = StyleSheet.create({
   back: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 0 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 2 },
-  badge: { position: 'absolute', top: 0, right: -4, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
+  tab: { flex: 1, alignItems: 'center', paddingTop: 8, paddingBottom: 6, paddingHorizontal: 2 },
+  tabPill: { width: 54, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: 2, right: 10, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
 });

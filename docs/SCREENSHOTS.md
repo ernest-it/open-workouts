@@ -16,13 +16,16 @@ Demo data: 10 weeks of an upper/lower split, imported from a Strong CSV export. 
 |---|---|---|---|
 | ![History](screenshots/android/06-history.png) | ![Workout detail](screenshots/android/07-workout-detail.png) | ![Exercise records](screenshots/android/09-exercise-records.png) | ![Exercise chart](screenshots/android/10-exercise-chart.png) |
 
-### Exercises, profile and settings
+### Exercises, profile and themes
 
-| Connect to your server | Exercise library | Profile & measurements | Settings |
+| Exercise library | Profile & measurements | Appearance settings | Black mode, Volt colour |
 |---|---|---|---|
-| ![Connect](screenshots/android/01-connect.png) | ![Exercises](screenshots/android/08-exercises.png) | ![Profile](screenshots/android/11-profile.png) | ![Settings](screenshots/android/12-settings.png) |
+| ![Exercises](screenshots/android/08-exercises.png) | ![Profile](screenshots/android/11-profile.png) | ![Settings](screenshots/android/12-settings.png) | ![Themes](screenshots/android/13-themes.png) |
 
 ### Dark mode
+
+Shown in the default Ember colour. Settings → Appearance has eight colours or any custom colour, in Light, Dark or Black.
+
 
 | Live workout | History | Profile | Progress chart |
 |---|---|---|---|
@@ -31,6 +34,9 @@ Demo data: 10 weeks of an upper/lower split, imported from a Strong CSV export. 
 ## Web UI
 
 Served by the same container at `http://<host>:8080`.
+
+**Start a workout**
+![Web start](screenshots/web/10-start.png)
 
 **Live workout**
 ![Web workout](screenshots/web/02-workout.png)
@@ -53,7 +59,7 @@ Served by the same container at `http://<host>:8080`.
 **Insights** (shown without an AI model configured; weekly updates and the MCP server for your own assistant)
 ![Web insights](screenshots/web/08-insights.png)
 
-**Settings**
+**Settings** (appearance, units, import and export)
 ![Web settings](screenshots/web/09-settings.png)
 
 **Sign in**

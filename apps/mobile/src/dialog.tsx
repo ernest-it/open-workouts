@@ -197,7 +197,7 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
                 onSubmitEditing={d.input.multiline ? undefined : () => (text.trim() || d.input?.allowEmpty) && close(text.trim())}
                 style={[
                   local.input,
-                  { color: t.text, borderColor: t.border, backgroundColor: t.bg },
+                  { color: t.text, backgroundColor: t.surface2 },
                   d.input.multiline && { minHeight: 88, maxHeight: 180, textAlignVertical: 'top' },
                 ]}
               />
@@ -219,7 +219,7 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
                       },
                     ]}
                   >
-                    <Text style={{ color: a.tone === 'default' ? t.text : '#fff', fontWeight: '600', fontSize: 15 }}>{a.text}</Text>
+                    <Text style={{ color: a.tone === 'default' ? t.text : a.tone === 'destructive' ? (t.dark ? '#111' : '#fff') : t.onAccent, fontWeight: '600', fontSize: 15 }}>{a.text}</Text>
                   </Pressable>
                 );
               })}
@@ -264,7 +264,7 @@ function ToastView({ toast, onDone }: { toast: Toast; onDone: () => void }) {
               onDone();
             }}
           >
-            <Text style={{ color: t.bg, fontWeight: '700', fontSize: 15 }}>{toast.action.text}</Text>
+            <Text style={{ color: t.bg, fontWeight: '800', fontSize: 15, textDecorationLine: 'underline' }}>{toast.action.text}</Text>
           </Pressable>
         )}
       </View>
@@ -275,16 +275,16 @@ function ToastView({ toast, onDone }: { toast: Toast; onDone: () => void }) {
 const local = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 24 },
   menuBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  box: { borderRadius: 16, padding: 20, width: '100%', maxWidth: 420, alignSelf: 'center' },
+  box: { borderRadius: 24, padding: 22, width: '100%', maxWidth: 420, alignSelf: 'center' },
   title: { fontSize: 18, fontWeight: '700' },
   message: { fontSize: 15, marginTop: 6, lineHeight: 21 },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 10, fontSize: 16, marginTop: 14 },
+  input: { borderWidth: 0, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 16, marginTop: 14 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  action: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  sheet: { borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 16, paddingTop: 8, width: '100%', maxWidth: 720, alignSelf: 'center' },
+  action: { flex: 1, paddingVertical: 13, borderRadius: 999, alignItems: 'center' },
+  sheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 16, paddingTop: 8, width: '100%', maxWidth: 720, alignSelf: 'center' },
   grabber: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
   menuRow: { paddingVertical: 15, alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth },
-  menuCancel: { paddingVertical: 14, alignItems: 'center', borderRadius: 12, marginTop: 8 },
+  menuCancel: { paddingVertical: 14, alignItems: 'center', borderRadius: 999, marginTop: 8 },
   toastWrap: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
-  toast: { flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, width: '100%', maxWidth: 520, elevation: 8, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10 },
+  toast: { flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 16, width: '100%', maxWidth: 520, elevation: 8, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10 },
 });

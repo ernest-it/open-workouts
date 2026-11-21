@@ -22,7 +22,7 @@
       "package": "org.openworkouts.app",
       "versionCode": 203,
       "adaptiveIcon": {
-        "backgroundColor": "#2f6df6",
+        "backgroundColor": "#ff5b2e",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

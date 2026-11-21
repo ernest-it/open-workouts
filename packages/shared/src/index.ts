@@ -7,3 +7,4 @@ export * from './backup';
 export * from './stats';
 export * from './store';
 export * from './insights';
+export * from './theme';

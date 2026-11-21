@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import {
   BODY_PARTS,
   EQUIPMENT,
@@ -15,7 +16,8 @@ import {
 } from '@open-workouts/shared';
 import { useNav } from '../nav';
 import { usePrefs, useStore } from '../state';
-import { Button, Card, Chips, H2, Input, Screen, Sheet, T, formatDate, label, showWeight, styles, useTheme } from '../ui';
+import { Button, Card, Chips, H2, Input, Screen, SearchInput, Segmented, Sheet, T, Title, formatDate, label, showWeight, styles, useTheme } from '../ui';
+import { ExerciseAvatar } from './Workout';
 import { useDialog } from '../dialog';
 
 export function ExercisesScreen() {
@@ -32,14 +34,9 @@ export function ExercisesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {/* Same width cap and header style as the other tabs (see Screen in ui.tsx). */}
-      <View style={[styles.sheetBody, { paddingHorizontal: 16, paddingTop: 16 }]}>
-      <View style={styles.rowBetween}>
-        <T bold style={styles.h1}>
-          Exercises
-        </T>
-        <Button small variant="primary" title="+ New" onPress={() => setCreating(true)} />
-      </View>
-      <Input placeholder="Search" value={q} onChangeText={setQ} autoCorrect={false} />
+      <View style={[styles.sheetBody, { paddingHorizontal: 16, paddingTop: 12 }]}>
+      <Title title="Exercises" right={<Button small variant="primary" icon="add" title="New" onPress={() => setCreating(true)} />} />
+      <SearchInput placeholder={`Search ${store.exercises().length} exercises`} value={q} onChangeText={setQ} />
       <Chips options={['all', ...BODY_PARTS].map((p) => ({ value: p, label: label(p) }))} value={part} onChange={setPart} />
       <FlatList
         data={list}
@@ -55,13 +52,18 @@ export function ExercisesScreen() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => nav.push({ name: 'exerciseDetail', id: item.id })}
-            style={{ paddingVertical: 12, borderBottomWidth: 0.5, borderColor: t.border }}
+            accessibilityRole="button"
+            style={({ pressed }) => [local.row, pressed && { backgroundColor: t.surface2 }]}
           >
-            <T bold>{item.name}</T>
-            <T small muted>
-              {label(item.bodyPart)}
-              {item.id.startsWith('builtin:') ? '' : ' · custom'}
-            </T>
+            <ExerciseAvatar name={item.name} />
+            <View style={{ flex: 1 }}>
+              <T bold>{item.name}</T>
+              <T small muted>
+                {label(item.bodyPart)} · {label(item.equipment)}
+                {item.id.startsWith('builtin:') ? '' : ' · custom'}
+              </T>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={t.muted} />
           </Pressable>
         )}
       />
@@ -135,16 +137,26 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
   const max = Math.max(1, ...points);
 
   return (
-    <Screen title={ex.name}>
-      <Chips
-        options={[
-          { value: 'records' as const, label: 'Records' },
-          { value: 'history' as const, label: 'History' },
-          { value: 'chart' as const, label: 'Chart' },
-        ]}
-        value={tab}
-        onChange={setTab}
-      />
+    <Screen title={ex.name} subtitle={`${label(ex.bodyPart)} · ${label(ex.equipment)}`}>
+      <View style={{ marginVertical: 6 }}>
+        <Segmented
+          options={[
+            { value: 'records' as const, label: 'Records' },
+            { value: 'history' as const, label: 'History' },
+            { value: 'chart' as const, label: 'Chart' },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </View>
+      {store.pinnedNote(ex.id) ? (
+        <View style={[local.note, { backgroundColor: t.accentSoft }]}>
+          <Ionicons name="pin" size={14} color={t.accentText} style={{ marginTop: 2 }} />
+          <T small style={{ flex: 1 }}>
+            {store.pinnedNote(ex.id)}
+          </T>
+        </View>
+      ) : null}
       {tab === 'records' && (
         <Card>
           {weighted ? (
@@ -201,8 +213,11 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
             <T muted>Not enough data yet.</T>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 160, gap: 2, marginTop: 8 }}>
-              {points.slice(-40).map((v, i) => (
-                <View key={i} style={{ flex: 1, height: `${(v / max) * 100}%`, backgroundColor: t.accent, borderTopLeftRadius: 3, borderTopRightRadius: 3 }} />
+              {points.slice(-40).map((v, i, arr) => (
+                <View
+                  key={i}
+                  style={{ flex: 1, height: `${(v / max) * 100}%`, borderRadius: 4, backgroundColor: v === max || i === arr.length - 1 ? t.accent : t.accentSoft }}
+                />
               ))}
             </View>
           )}
@@ -219,9 +234,16 @@ export function ExerciseDetailScreen({ id }: { id: string }) {
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <View style={[styles.rowBetween, { paddingVertical: 4 }]}>
+    <View style={[styles.rowBetween, { paddingVertical: 6 }]}>
       <T muted>{k}</T>
-      <T bold>{v}</T>
+      <T bold style={{ fontVariant: ['tabular-nums'] }}>
+        {v}
+      </T>
     </View>
   );
 }
+
+const local = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 14 },
+  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: 12, padding: 10, marginVertical: 6 },
+});

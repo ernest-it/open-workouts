@@ -10,6 +10,7 @@ The model is the fast "templates → live workout → history and PRs" loop that
 - 🌐 **Web UI** served by the same container: log, review and import from any browser.
 - 🐳 **One container, one SQLite file.** Runs on Docker Compose, Kubernetes, or a Proxmox LXC.
 - 🔁 **Import and export** on mobile and web. Imports Strong CSVs (all three export variants). Exports a Strong-compatible CSV that imports back without duplicates, and a full JSON backup (workouts, templates, measurements and settings) that restores on any device.
+- 🎨 **Themes.** Light, dark and pure-black modes, eight accent colours, or any custom colour. Text contrast adjusts automatically so every choice stays readable.
 - ✨ **AI insights (optional).** The AI part is optional:
   - **Built in:** weekly training updates pushed to your phone, "compare with previous workout", and questions about your training. Uses Claude or a local model (Ollama).
   - **Your own assistant:** Claude Desktop, Claude Code or another AI assistant can read your log through the built-in MCP server.

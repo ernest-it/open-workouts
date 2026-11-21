@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fromKg, looksLikeBackup, parseBackup, toKg } from '@open-workouts/shared';
 import { api, loadAuth, usePrefs, useStore, type Prefs } from '../state';
 import { useDialog } from '../dialog';
+import { AppearanceSection } from '../Appearance';
 
 interface SessionInfo {
   id: string;
@@ -79,6 +80,8 @@ export function SettingsPage({ onLogout }: { onLogout: () => void }) {
   return (
     <div className="page">
       <h1>Settings</h1>
+
+      <AppearanceSection />
 
       <section className="card">
         <h3>Units & defaults</h3>

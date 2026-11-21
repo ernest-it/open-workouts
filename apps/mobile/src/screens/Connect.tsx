@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { normalizeServerUrl, type Account } from '../state';
-import { Button, Card, Input, Screen, T } from '../ui';
+import { Button, Card, Input, Screen, T, useTheme } from '../ui';
 
 /** First-run screen: connect to a self-hosted server, or use the app locally. */
 export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
+  const t = useTheme();
   const [url, setUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -83,7 +84,7 @@ export function ConnectScreen({ onDone }: { onDone: (a: Account) => void }) {
           )}
           {busy && <ActivityIndicator style={{ marginTop: 8 }} />}
           {error && (
-            <T small style={{ color: '#dc2626', marginTop: 8 }}>
+            <T small style={{ color: t.danger, marginTop: 8 }}>
               {error}
             </T>
           )}
