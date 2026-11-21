@@ -1,7 +1,7 @@
 {
   "name": "open-workouts",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Source-available, self-hostable strength training tracker (server + web + mobile)",
   "license": "PolyForm-Noncommercial-1.0.0",
   "workspaces": [
