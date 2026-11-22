@@ -351,3 +351,16 @@ button.hero:hover:not(:disabled) { filter: brightness(1.05); }
 button.hero strong { display: block; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
 button.hero span span { opacity: 0.85; font-size: 0.9rem; }
 .hero-icon { flex: none; width: 3rem; height: 3rem; border-radius: 50%; background: var(--on-accent); color: var(--accent); display: inline-flex; align-items: center; justify-content: center; font-size: 1.1rem; padding-left: 3px; }
+
+/* Measurements */
+.measure-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-top: 0.8rem; }
+.measure-tile { margin: 0; display: flex; flex-direction: column; gap: 0.15rem; cursor: pointer; }
+.measure-tile .eyebrow { margin: 0; }
+.measure-value { font-size: 1.45rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.measure-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 0 0.8rem; align-items: start; }
+.measure-groups .card h3 { margin-top: 0; }
+.measure-row { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 0.6rem; padding: 0.35rem 0; }
+.measure-row + .measure-row { border-top: 1px solid var(--border); }
+.measure-inputs { display: flex; gap: 0.5rem; }
+.measure-input { flex: 1; display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.measure-input input { width: 100%; min-width: 0; text-align: center; font-variant-numeric: tabular-nums; }

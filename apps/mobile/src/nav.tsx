@@ -11,6 +11,8 @@ export type Route =
   | { name: 'exercises' }
   | { name: 'exerciseDetail'; id: string }
   | { name: 'profile' }
+  | { name: 'measurement'; id: string }
+  | { name: 'measureLog' }
   | { name: 'insights' }
   | { name: 'settings' };
 

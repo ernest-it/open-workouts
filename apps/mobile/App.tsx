@@ -16,6 +16,7 @@ import { ProfileScreen, SettingsScreen } from './src/screens/Profile';
 import { InsightsScreen } from './src/screens/Insights';
 import { WorkoutDoneScreen } from './src/screens/WorkoutDone';
 import { TemplateEditScreen } from './src/screens/TemplateEdit';
+import { LogMeasurementsScreen, MeasurementScreen } from './src/screens/Measurements';
 import { useNow } from './src/screens/ActiveWorkout';
 import { useRest, useRestWatcher } from './src/rest';
 import { formatDuration } from '@open-workouts/shared';
@@ -285,6 +286,8 @@ function TabStack({ stack, account, onSignOut, onBack }: { stack: Route[]; accou
         {route.name === 'exercises' && <ExercisesScreen />}
         {route.name === 'exerciseDetail' && <ExerciseDetailScreen id={route.id} />}
         {route.name === 'profile' && <ProfileScreen account={account} />}
+        {route.name === 'measurement' && <MeasurementScreen id={route.id} />}
+        {route.name === 'measureLog' && <LogMeasurementsScreen />}
         {route.name === 'insights' && <InsightsScreen account={account} />}
         {route.name === 'settings' && <SettingsScreen account={account} onSignOut={onSignOut} />}
       </SlideIn>

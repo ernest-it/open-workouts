@@ -5,7 +5,8 @@ import { Login } from './pages/Login';
 import { WorkoutPage } from './pages/Workout';
 import { HistoryPage } from './pages/History';
 import { ExercisesPage } from './pages/Exercises';
-import { MeasurementsPage, ProfilePage } from './pages/Profile';
+import { ProfilePage } from './pages/Profile';
+import { MeasurementsPage } from './pages/Measurements';
 import { SettingsPage } from './pages/Settings';
 import { InsightsPage } from './pages/Insights';
 import { Icon, type IconName } from './icons';
@@ -78,7 +79,7 @@ function Shell({ auth, onLogout }: { auth: Auth; onLogout: () => void }) {
         {section === 'history' && <HistoryPage id={id} />}
         {section === 'workout' && <WorkoutPage />}
         {section === 'exercises' && <ExercisesPage id={id} />}
-        {section === 'measure' && <MeasurementsPage />}
+        {section === 'measure' && <MeasurementsPage id={id} />}
         {section === 'insights' && <InsightsPage />}
         {section === 'settings' && <SettingsPage onLogout={onLogout} />}
       </main>

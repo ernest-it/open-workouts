@@ -10,3 +10,4 @@ export * from './insights';
 export * from './theme';
 export * from './templates';
 export * from './muscles';
+export * from './measurements';

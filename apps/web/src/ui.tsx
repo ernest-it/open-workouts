@@ -89,20 +89,27 @@ export function LineChart({ points, unit = '' }: { points: { x: number; y: numbe
   const W = 600;
   const H = 180;
   const P = 28;
+  const L = 64; // left gutter for the value labels
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
   const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
-  const [y0, y1] = [Math.min(...ys) * 0.95, Math.max(...ys) * 1.05 || 1];
-  const sx = (x: number) => P + ((x - x0) / (x1 - x0 || 1)) * (W - 2 * P);
+  // Fit the scale to the data (not to zero) so small changes, like body weight, stay visible.
+  const [lo, hi] = [Math.min(...ys), Math.max(...ys)];
+  const pad = Math.max((hi - lo) * 0.15, Math.abs(hi) * 0.01, 0.5);
+  const [y0, y1] = [lo - pad, hi + pad];
+  const sx = (x: number) => L + ((x - x0) / (x1 - x0 || 1)) * (W - L - P);
   const sy = (y: number) => H - P - ((y - y0) / (y1 - y0 || 1)) * (H - 2 * P);
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="chart" role="img">
-      <line x1={P} y1={H - P} x2={W - P} y2={H - P} className="axis" />
-      <text x={P} y={14} className="tick">
-        {+y1.toFixed(1)} {unit}
+      <line x1={L} y1={H - P} x2={W - P} y2={H - P} className="axis" />
+      <text x={L - 8} y={sy(hi) + 4} className="tick" textAnchor="end">
+        {+hi.toFixed(1)} {unit}
       </text>
-      <text x={P} y={H - 8} className="tick">
+      <text x={L - 8} y={sy(lo) + 4} className="tick" textAnchor="end">
+        {+lo.toFixed(1)} {unit}
+      </text>
+      <text x={L} y={H - 8} className="tick">
         {new Date(x0).toLocaleDateString()}
       </text>
       <text x={W - P} y={H - 8} className="tick" textAnchor="end">

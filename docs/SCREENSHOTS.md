@@ -49,7 +49,7 @@ Served by the same container at `http://<host>:8080`.
 **Profile**
 ![Web profile](screenshots/web/06-profile.png)
 
-**Measurements**
+**Measurements** (a tile per tracked measurement with its change over the last month; "Log measurements" opens one grouped form for everything)
 ![Web measurements](screenshots/web/07-measurements.png)
 
 **Exercise library**

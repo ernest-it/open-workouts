@@ -107,6 +107,7 @@ export function InsightsPage() {
         </div>
         <form
           className="row"
+          style={{ marginTop: '0.6rem' }}
           onSubmit={(e) => {
             e.preventDefault();
             if (question.trim().length < 3) return;

@@ -32,7 +32,7 @@ The model is the fast "templates → live workout → history and PRs" loop that
 | **Templates** | Unlimited, with folders; build and edit them on the phone or the web; save or update one from a workout; suggested next template and repeat last workout |
 | **Records** | Estimated 1RM (Brzycki), max weight, max set and session volume, rep records 1–12 with predictions, PR badges per set |
 | **History & progress** | Calendar and search, per-workout summaries, a finish screen comparing with last time, progress charts with time ranges, weekly goal and streak (with a reminder before it breaks), a body map of sets per muscle |
-| **Measurements** | Body weight, body fat, calories, 15 body circumferences, with charts |
+| **Measurements** | Body weight, body fat, calories, 15 body circumferences. Log them all in one grouped form, see the latest value and monthly change at a glance, with charts |
 | **Exercises** | 185 built-in, plus custom exercises (weight × reps, ± bodyweight, reps only, duration, cardio) |
 | **AI insights** | Weekly reports with ntfy/Discord notifications, workout comparisons, Q&A, plateau detection; Claude or local LLMs; MCP server for your own assistant. See [docs/AI_INSIGHTS.md](docs/AI_INSIGHTS.md) |
 | **Your data** | Works fully offline on the phone with no account; automatic daily backups on the phone; full backup and restore; sync status always visible |

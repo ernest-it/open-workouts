@@ -24,6 +24,7 @@ import { Button, Card, Chips, Eyebrow, H2, IconButton, NumInput, Screen, Segment
 import { AppearanceCard } from './Appearance';
 import { LineChart } from '../chart';
 import { BodyHeatmap } from '../bodymap';
+import { MeasurementsCard } from './Measurements';
 import { autoBackup, listAutoBackups } from '../autobackup';
 import { APP_VERSION } from '../update';
 import { allowReminders } from '../reminders';
@@ -86,83 +87,8 @@ export function ProfileScreen({ account }: { account: Account }) {
         </View>
       </Card>
       <BodyHeatmap />
-      <Measurements prefs={prefs} />
+      <MeasurementsCard />
     </Screen>
-  );
-}
-
-function Measurements({ prefs }: { prefs: Prefs }) {
-  const store = useStore();
-  const dialog = useDialog();
-  const [kind, setKind] = useState<MeasurementKind>('body_weight');
-  const [value, setValue] = useState<number | null>(null);
-  const unit = kind === 'body_weight' ? prefs.weightUnit : kind === 'body_fat' ? '%' : kind === 'caloric_intake' ? 'kcal' : 'cm';
-  const list = store
-    .all('measurements')
-    .filter((m) => m.kind === kind)
-    .sort((a, b) => b.takenAt - a.takenAt);
-  const show = (v: number) => (kind === 'body_weight' ? +fromKg(v, prefs.weightUnit).toFixed(2) : v);
-  return (
-    <View>
-      <H2>Measurements</H2>
-      <Chips options={MEASUREMENT_KINDS.map((k) => ({ value: k, label: label(k) }))} value={kind} onChange={setKind} />
-      <Card>
-      {list.length >= 2 && (
-        <View style={{ marginBottom: 12 }}>
-          <LineChart
-            label={label(kind)}
-            height={150}
-            points={list.map((m) => ({ at: m.takenAt, value: show(m.value) })).reverse()}
-            format={(v) => `${formatNumber(v, 1)} ${unit}`}
-          />
-        </View>
-      )}
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <NumInput value={value} onChange={setValue} placeholder={`New ${label(kind).toLowerCase()}`} accessibilityLabel={`New ${label(kind)} value in ${unit}`} />
-        </View>
-        <T muted>{unit}</T>
-        <Button
-          title="Add"
-          icon="add"
-          small
-          variant="primary"
-          disabled={value == null}
-          onPress={() => {
-            store.insert('measurements', { kind, value: kind === 'body_weight' ? toKg(value!, prefs.weightUnit) : value!, takenAt: Date.now(), note: null });
-            setValue(null);
-          }}
-        />
-      </View>
-      {list.length === 0 && (
-        <T small muted style={{ marginTop: 8 }}>
-          Nothing logged yet.
-        </T>
-      )}
-      {list.slice(0, 20).map((m) => (
-        <View key={m.id} style={[styles.rowBetween, { paddingVertical: 4 }]}>
-          <T bold style={{ fontVariant: ['tabular-nums'] }}>
-            {show(m.value)} {unit}
-          </T>
-          <T small muted>
-            {formatDate(m.takenAt)}
-          </T>
-          <IconButton
-            name="trash-outline"
-            label={`Delete ${show(m.value)} ${unit}`}
-            onPress={() => {
-              // Delete straight away, with Undo, rather than asking first.
-              store.remove('measurements', m.id);
-              dialog.toast(`Deleted ${show(m.value)} ${unit}`, {
-                text: 'Undo',
-                onPress: () => store.insert('measurements', { kind: m.kind, value: m.value, takenAt: m.takenAt, note: m.note }),
-              });
-            }}
-          />
-        </View>
-      ))}
-      </Card>
-    </View>
   );
 }
 
