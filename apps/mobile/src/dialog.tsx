@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Animated, BackHandler, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from './ui';
+import { selectionTint, useTheme } from './ui';
 
 /**
  * In-app dialogs, action sheets and toasts, drawn with the app's own theme instead of the
@@ -191,6 +191,9 @@ function DialogView({ d, close }: { d: DialogState; close: (v: unknown) => void 
                 onChangeText={setText}
                 placeholder={d.input.placeholder}
                 placeholderTextColor={t.muted}
+                selectionColor={selectionTint(t.accent)}
+                selectionHandleColor={t.accent}
+                cursorColor={t.accentText}
                 selectTextOnFocus={!d.input.multiline}
                 multiline={d.input.multiline}
                 returnKeyType={d.input.multiline ? 'default' : 'done'}

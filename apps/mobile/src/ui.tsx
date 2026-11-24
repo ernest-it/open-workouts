@@ -36,6 +36,13 @@ export function useTheme(): Theme {
   return t;
 }
 
+/** Text-selection highlight: the accent at about a third opacity so selected digits stay readable. */
+export function selectionTint(c: string): string {
+  const h = c.trim().replace('#', '');
+  const full = h.length === 3 ? h.replace(/./g, (x) => x + x) : h;
+  return /^[0-9a-f]{6}$/i.test(full) ? `#${full}55` : c;
+}
+
 export function Screen({
   children,
   title,
@@ -157,7 +164,8 @@ export function Input(props: TextInputProps) {
   return (
     <TextInput
       placeholderTextColor={t.muted}
-      selectionColor={t.accent}
+      selectionColor={selectionTint(t.accent)}
+      selectionHandleColor={t.accent}
       cursorColor={t.accentText}
       {...props}
       style={[styles.input, { color: t.text, backgroundColor: t.surface2 }, props.style]}
@@ -165,20 +173,33 @@ export function Input(props: TextInputProps) {
   );
 }
 
-/** Search field with a magnifier icon. */
+/** Search field with a magnifier icon and, once there is text, a button that clears it. */
 export function SearchInput(props: TextInputProps) {
   const t = useTheme();
+  const canClear = !!props.value && !!props.onChangeText;
   return (
     <View style={[styles.search, { backgroundColor: t.surface2 }]}>
       <Ionicons name="search" size={18} color={t.muted} />
       <TextInput
         placeholderTextColor={t.muted}
-        selectionColor={t.accent}
+        selectionColor={selectionTint(t.accent)}
+        selectionHandleColor={t.accent}
         cursorColor={t.accentText}
         autoCorrect={false}
         {...props}
         style={[{ flex: 1, color: t.text, fontSize: 15, paddingVertical: 11 }, props.style]}
       />
+      {canClear && (
+        <Pressable
+          onPress={() => props.onChangeText!('')}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+        >
+          <Ionicons name="close-circle" size={20} color={t.muted} />
+        </Pressable>
+      )}
     </View>
   );
 }

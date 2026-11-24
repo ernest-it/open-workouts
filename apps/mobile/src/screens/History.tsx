@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatDuration, formatElapsed, workoutPRs, workoutSummaries, workoutSummary, type Workout } from '@open-workouts/shared';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNav } from '../nav';
-import { usePrefs, useStore } from '../state';
+import { usePrefs, useStore, type Prefs } from '../state';
 import { Button, Card, Eyebrow, IconButton, Pill, Screen, SearchInput, Stat, T, formatDate, showVolume, showWeight, styles, useTheme } from '../ui';
-import { ActiveWorkout, SetBadge } from './Workout';
+import { ActiveWorkout } from './Workout';
 import { useDialog } from '../dialog';
 import { HeaderActions } from '../ProfileButton';
 
@@ -166,36 +167,59 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
           <T>{w.notes}</T>
         </View>
       ) : null}
-      {store.workoutExercises(id).map((we) => {
-        let n = 0;
-        return (
-          <Card key={we.id} onPress={() => nav.push({ name: 'exerciseDetail', id: we.exerciseId })}>
-            <T bold style={{ fontSize: 17 }}>
-              {store.get('exercises', we.exerciseId)?.name ?? 'Unknown'}
-            </T>
-            {we.notes ? (
-              <View style={[local.notes, { backgroundColor: t.surface2 }]}>
-                <T small muted>
+      {/* One compact card with every set as a small chip, so a whole workout fits in a screenshot. */}
+      <Card>
+        {store.workoutExercises(id).map((we, i) => {
+          const sets = store.setsOf(we.id);
+          const weighted = sets.some((s) => s.weight != null);
+          let n = 0;
+          return (
+            <Pressable
+              key={we.id}
+              onPress={() => nav.push({ name: 'exerciseDetail', id: we.exerciseId })}
+              accessibilityRole="button"
+              style={({ pressed }) => ({ paddingTop: i ? 8 : 0, paddingBottom: 8, borderTopWidth: i ? 1 : 0, borderTopColor: t.border, opacity: pressed ? 0.6 : 1 })}
+            >
+              <View style={styles.rowBetween}>
+                <T bold lines={1} style={{ flex: 1 }}>
+                  {store.get('exercises', we.exerciseId)?.name ?? 'Unknown'}
+                </T>
+                {weighted && (
+                  <T small muted>
+                    {prefs.weightUnit}
+                  </T>
+                )}
+              </View>
+              <View style={local.chips}>
+                {sets.length === 0 && <T muted>No sets</T>}
+                {sets.map((s) => {
+                  const mark = s.kind === 'warmup' ? 'W' : s.kind === 'drop' ? 'D' : s.kind === 'failure' ? 'F' : String(++n);
+                  const markColor = { normal: t.muted, warmup: t.warn, drop: t.accentText, failure: t.danger }[s.kind];
+                  const record = prs.get(s.id);
+                  const text = setText(s, prefs, dist);
+                  return (
+                    <View
+                      key={s.id}
+                      accessible
+                      accessibilityLabel={`Set ${mark}: ${text}${s.weight != null ? ` ${prefs.weightUnit}` : ''}${record ? `, new record: ${record.join(', ')}` : ''}`}
+                      style={[local.chip, { backgroundColor: record ? t.accentSoft : t.surface2 }]}
+                    >
+                      <Text style={{ color: markColor, fontSize: 11, fontWeight: '800' }}>{mark}</Text>
+                      <Text style={{ color: t.text, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{text}</Text>
+                      {record && <Ionicons name="trophy" size={12} color={t.accentText} />}
+                    </View>
+                  );
+                })}
+              </View>
+              {we.notes ? (
+                <T small muted style={{ fontStyle: 'italic', marginTop: 2 }}>
                   {we.notes}
                 </T>
-              </View>
-            ) : null}
-            {store.setsOf(we.id).map((s) => (
-              <View key={s.id} style={[styles.row, { paddingVertical: 3 }]}>
-                <SetBadge kind={s.kind} text={s.kind === 'warmup' ? 'W' : s.kind === 'drop' ? 'D' : s.kind === 'failure' ? 'F' : String(++n)} />
-                <T style={{ flex: 1, fontVariant: ['tabular-nums'] }}>
-                  {s.weight != null ? `${showWeight(s.weight, prefs)} ${prefs.weightUnit} × ` : ''}
-                  {s.reps ?? ''}
-                  {s.distance != null ? ` ${(s.distance / dist).toFixed(2)} ${prefs.distanceUnit}` : ''}
-                  {s.duration != null ? ` ${formatDuration(s.duration)}` : ''}
-                  {s.rpe != null ? ` @${s.rpe}` : ''}
-                </T>
-                {prs.get(s.id) && <Pill icon="trophy" text={prs.get(s.id)!.join(', ')} />}
-              </View>
-            ))}
-          </Card>
-        );
-      })}
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </Card>
       <Button
         title="Save as template"
         icon="bookmark-outline"
@@ -231,6 +255,21 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       />
     </Screen>
   );
+}
+
+type LoggedSet = ReturnType<ReturnType<typeof useStore>['setsOf']>[number];
+
+/** One set, short: "82.5×8 @9", "12 reps", "2.50 km 12:30". The weight unit is shown once per exercise. */
+function setText(s: LoggedSet, prefs: Prefs, dist: number): string {
+  const lift = s.weight != null ? `${showWeight(s.weight, prefs)}×${s.reps ?? 0}` : s.reps != null ? `${s.reps} reps` : '';
+  return [
+    lift,
+    s.distance != null ? `${(s.distance / dist).toFixed(2)} ${prefs.distanceUnit}` : '',
+    s.duration != null ? formatDuration(s.duration) : '',
+    s.rpe != null ? `@${s.rpe}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 const dayStart = (ms: number) => {
@@ -320,4 +359,6 @@ const local = StyleSheet.create({
   todayRing: { position: 'absolute', top: -3, left: -3, right: -3, bottom: -3, borderRadius: 21, borderWidth: 1.5 },
   date: { width: 50, height: 54, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   notes: { borderRadius: 12, padding: 10, marginTop: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
 });
