@@ -20,17 +20,17 @@ This document lists what the Strong workout tracker (iOS/Android, strong.app) do
 
 | Feature | Strong behaviour | Open Workouts status |
 |---|---|---|
-| Start a workout | Start empty, or start from a template [help] | ✅ both |
-| Set table | Columns: Set # · Previous · kg/lb · Reps · ✓ [3p] | ✅ |
-| "Previous" column | Shows the same set from the last time you did the exercise [3p] | ✅ new sets are pre-filled from the last session; tap to copy (mobile) |
-| Set types | Warm-up (W), Drop (D), Failure (F), normal [help/code] | ✅ tap the set number to cycle the type |
-| RPE | Per set; Strong's help uses 6–10, with a reps-in-reserve table (`/article/230-about-rpe`) [help] | ✅ 6–10 in 0.5 steps (schema allows 1–10) |
-| Rest timer | Starts automatically when a set is completed. Default 2:00; separate warm-up and working durations; sound, full-screen mode; can be disabled (`/article/231-rest-timer`) [help] | ✅ auto-start, per-exercise override, ±15 s, skip, vibration. ⏳ separate warm-up timer, background notification |
-| Supersets | Created from the exercise "…" menu; exercises grouped and done alternately (`/article/98`) [help] | 🟡 in the data model (`supersetId`), no UI yet |
-| Notes | Per exercise and per workout [code] | ✅ |
-| Workout duration | Timer from the start of the session [help] | ✅ |
-| Edit past workouts | From History [unverified] | ✅ |
-| Discard incomplete sets on finish | [unverified] | ✅ with a confirmation |
+| Start a workout | Start empty, or start from a template [help] | Yes: both |
+| Set table | Columns: Set # · Previous · kg/lb · Reps · ✓ [3p] | Yes |
+| "Previous" column | Shows the same set from the last time you did the exercise [3p] | Yes: new sets are pre-filled from the last session; tap to copy (mobile) |
+| Set types | Warm-up (W), Drop (D), Failure (F), normal [help/code] | Yes: tap the set number to cycle the type |
+| RPE | Per set; Strong's help uses 6–10, with a reps-in-reserve table (`/article/230-about-rpe`) [help] | Yes: 6–10 in 0.5 steps (schema allows 1–10) |
+| Rest timer | Starts automatically when a set is completed. Default 2:00; separate warm-up and working durations; sound, full-screen mode; can be disabled (`/article/231-rest-timer`) [help] | Yes: auto-start, per-exercise override, ±15 s, skip, vibration. Planned: separate warm-up timer, background notification |
+| Supersets | Created from the exercise "…" menu; exercises grouped and done alternately (`/article/98`) [help] | Partial: in the data model (`supersetId`), no UI yet |
+| Notes | Per exercise and per workout [code] | Yes |
+| Workout duration | Timer from the start of the session [help] | Yes |
+| Edit past workouts | From History [unverified] | Yes |
+| Discard incomplete sets on finish | [unverified] | Yes: with a confirmation |
 
 ## 2. Exercise model
 
@@ -59,37 +59,37 @@ This document lists what the Strong workout tracker (iOS/Android, strong.app) do
 - Strong ships example templates.
 - Templates can be shared as a link.
 - The **free tier is limited to 3 templates**.
-  - Open Workouts: unlimited ✅, folders ✅, save a workout as a template ✅. Sharing ⏳.
+  - Open Workouts: unlimited templates, folders, and saving a workout as a template are supported. Sharing is planned.
 
 ## 4. Records & PRs
 
 - **Estimated 1RM:** Strong uses the **Brzycki** formula, `1RM = w × 36 / (37 − reps)`. It notes that the estimate breaks down above ~12 reps (`/article/133-1rm`) [help].
   - Implemented in `packages/shared/src/calc.ts`; Epley, Lombardi, Mayhew, O'Conner and Wathan are also available.
 - **Records tab:** estimated 1RM, max weight, and max volume (weight × reps in one set), each with history.
-  - A rep-records table covers **1–12 reps**: the best actual weight next to a value *predicted* from the best e1RM (`/article/216`) [help]. ✅ Both are implemented.
-- **History:** each workout shows a PR count [3p]. ✅ We also compute PRs per set (repeats within a session don't count twice).
+  - A rep-records table covers **1–12 reps**: the best actual weight next to a value *predicted* from the best e1RM (`/article/216`) [help]. Both are implemented.
+- **History:** each workout shows a PR count [3p]. We also compute PRs per set (repeats within a session don't count twice).
 
 ## 5. History, charts, profile
 
-- **History:** a list showing time, total weight and PR count, plus a calendar [3p]. ✅
-- **Exercise charts:** best set (e1RM), volume and more [3p]. ✅ e1RM, max weight, volume, max reps.
+- **History:** a list showing time, total weight and PR count, plus a calendar [3p]. Implemented.
+- **Exercise charts:** best set (e1RM), volume and more [3p]. Implemented: e1RM, max weight, volume, max reps.
 - **Profile dashboard:** widgets can be reordered; "Workouts per week" has a goal; any exercise or measurement chart can be added (`/article/239`) [help].
-  - ✅ workouts/week and body weight. ⏳ configurable widgets and goals.
-- iOS home-screen widgets (calendar/streak, activity) [3p]. ⏳
+  - Implemented: workouts/week and body weight. Planned: configurable widgets and goals.
+- iOS home-screen widgets (calendar/streak, activity) [3p]. Planned.
 
 ## 6. Measurements (`/article/238`) [help]
 
 - **Core:** Weight, Body Fat %, Caloric Intake. These sync with Apple Health.
 - **Body parts** (PRO only in Strong): Neck, Shoulders, Chest, L/R Bicep, L/R Forearm, Upper Abs, Waist, Lower Abs, Hips, L/R Thigh, L/R Calf.
-- ✅ All of them are in `MEASUREMENT_KINDS`, free.
+- All of them are in `MEASUREMENT_KINDS`, free.
 
 ## 7. Tools
 
 | Tool | Strong | Open Workouts |
 |---|---|---|
-| Plate calculator | PRO only (`/article/169`) | ✅ free; bar weight is configurable; ⏳ custom plate inventory in the UI (supported by `calculatePlates`) |
-| Warm-up calculator | PRO only; barbell, dumbbell and machine (`/article/171`) | ✅ web; ⏳ mobile |
-| Units | kg/lb, km/mi | ✅ stored in SI units, converted at the display layer |
+| Plate calculator | PRO only (`/article/169`) | Yes: free; bar weight is configurable; planned: custom plate inventory in the UI (supported by `calculatePlates`) |
+| Warm-up calculator | PRO only; barbell, dumbbell and machine (`/article/171`) | Yes on the web; planned on mobile |
+| Units | kg/lb, km/mi | Yes: stored in SI units, converted at the display layer |
 
 ## 8. CSV export format (interoperability)
 
@@ -126,7 +126,7 @@ This document lists what the Strong workout tracker (iOS/Android, strong.app) do
 
 **Not handled yet:** dates localised to other languages (e.g. `21 août 2024`). Workaround: export with the app set to English, which is also Hevy's advice.
 
-**Never in any Strong export:** superset grouping, or the rest duration between sets. The separate measurements export (`Date, Measurement Type, Value, Unit, Source`) is ⏳.
+**Never in any Strong export:** superset grouping, or the rest duration between sets. The separate measurements export (`Date, Measurement Type, Value, Unit, Source`) is planned.
 
 **Our export** (`GET /api/v1/export/strong.csv`) writes the classic comma format. That's the variant most other apps (Hevy, etc.) accept.
 
@@ -149,8 +149,8 @@ This document lists what the Strong workout tracker (iOS/Android, strong.app) do
 | Lossy export | Full JSON backup + Strong-compatible CSV |
 | No public API | Documented REST and sync API; API tokens |
 | Rigid exercise types | Editable `logType`; equipment kept as a separate field |
-| Android lags behind iOS; no Wear OS | One React Native codebase for both. Wear OS/watchOS ⏳ |
-| No progression or programming | ⏳ roadmap: progression rules, programs |
+| Android lags behind iOS; no Wear OS | One React Native codebase for both. Wear OS/watchOS planned |
+| No progression or programming | On the roadmap: progression rules, programs |
 | Your data sits on someone else's cloud | Self-hosted (Docker, Kubernetes, Proxmox LXC), or local-only mode in the app |
 
 ## Sources

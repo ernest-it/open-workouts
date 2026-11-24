@@ -102,22 +102,22 @@ Authorization: Bearer <token>
 
 | Method & path | Auth | Purpose |
 |---|---|---|
-| `GET /api/v1/health` | – | Liveness/readiness |
-| `GET /api/v1/server-info` | – | `{name, version, apiVersion, registrationOpen, serverId}`. The app uses it to recognise a server |
-| `GET /api/v1/exercises/builtin` | – | The built-in exercise library |
-| `POST /api/v1/auth/register` | – | `{username, password, deviceName?}` → `{token, user}`. The first user becomes admin; after that, registration needs `ALLOW_REGISTRATION=true` |
-| `POST /api/v1/auth/login` | – | Same shape. Rate-limited per IP |
-| `POST /api/v1/auth/logout` | ✓ | Revokes the current token |
-| `POST /api/v1/auth/password` | ✓ | Changes the password and revokes the user's other sessions |
-| `GET /api/v1/me`, `DELETE /api/v1/me` `{password}` | ✓ | Profile; delete the account and all its data (requires the password) |
-| `GET /api/v1/sessions`, `DELETE /api/v1/sessions/:id` | ✓ | List and revoke devices |
-| `POST /api/v1/tokens` | ✓ | Create a named long-lived API token |
-| `POST /api/v1/sync` | ✓ | See above |
-| `POST /api/v1/import/strong?weightUnit=kg\|lb&distanceUnit=km\|mi&tzOffset=<min>` | ✓ | Body: the CSV (`text/csv`) or `{"csv": "..."}` |
-| `GET /api/v1/export/strong.csv?weightUnit=&distanceUnit=&tzOffset=<min>` | ✓ | Strong-compatible CSV (units in the header; times in the given zone). Workouts already logged are skipped when it is imported back |
-| `GET /api/v1/export/json` | ✓ | Full backup (`packages/shared/src/backup.ts`). The apps restore it on-device with `WorkoutStore.restoreBackup` and push it through `/sync` |
-| `/api/v1/insights/*` | ✓ | AI insights: digest, reports, comparisons, Q&A, weekly schedule; see [AI_INSIGHTS.md](AI_INSIGHTS.md) |
-| `POST /mcp` | ✓ | Read-only MCP server (Streamable HTTP, JSON-RPC) for AI assistants |
+| `GET /api/v1/health` | No | Liveness/readiness |
+| `GET /api/v1/server-info` | No | `{name, version, apiVersion, registrationOpen, serverId}`. The app uses it to recognise a server |
+| `GET /api/v1/exercises/builtin` | No | The built-in exercise library |
+| `POST /api/v1/auth/register` | No | `{username, password, deviceName?}` → `{token, user}`. The first user becomes admin; after that, registration needs `ALLOW_REGISTRATION=true` |
+| `POST /api/v1/auth/login` | No | Same shape. Rate-limited per IP |
+| `POST /api/v1/auth/logout` | Yes | Revokes the current token |
+| `POST /api/v1/auth/password` | Yes | Changes the password and revokes the user's other sessions |
+| `GET /api/v1/me`, `DELETE /api/v1/me` `{password}` | Yes | Profile; delete the account and all its data (requires the password) |
+| `GET /api/v1/sessions`, `DELETE /api/v1/sessions/:id` | Yes | List and revoke devices |
+| `POST /api/v1/tokens` | Yes | Create a named long-lived API token |
+| `POST /api/v1/sync` | Yes | See above |
+| `POST /api/v1/import/strong?weightUnit=kg\|lb&distanceUnit=km\|mi&tzOffset=<min>` | Yes | Body: the CSV (`text/csv`) or `{"csv": "..."}` |
+| `GET /api/v1/export/strong.csv?weightUnit=&distanceUnit=&tzOffset=<min>` | Yes | Strong-compatible CSV (units in the header; times in the given zone). Workouts already logged are skipped when it is imported back |
+| `GET /api/v1/export/json` | Yes | Full backup (`packages/shared/src/backup.ts`). The apps restore it on-device with `WorkoutStore.restoreBackup` and push it through `/sync` |
+| `/api/v1/insights/*` | Yes | AI insights: digest, reports, comparisons, Q&A, weekly schedule; see [AI_INSIGHTS.md](AI_INSIGHTS.md) |
+| `POST /mcp` | Yes | Read-only MCP server (Streamable HTTP, JSON-RPC) for AI assistants |
 
 **Authentication.** Opaque bearer tokens (`ow_…`, 256-bit). Only their SHA-256 hash is stored. Passwords are hashed with scrypt (N=16384, r=8, p=1).
 

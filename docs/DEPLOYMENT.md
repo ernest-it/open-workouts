@@ -4,9 +4,9 @@ Open Workouts is **one process with one SQLite file**. Pick whichever platform y
 
 | Option | Best for | Effort |
 |---|---|---|
-| [Docker / Compose](#docker--compose) | Most homelabs, NAS (Synology, Unraid, TrueNAS), a VPS | ⭐ easiest |
-| [Kubernetes](#kubernetes) | k3s / Talos / existing clusters | ⭐⭐ |
-| [Proxmox](#proxmox) | Proxmox VE hosts: an LXC with no Docker, or a VM running Docker | ⭐⭐ |
+| [Docker / Compose](#docker--compose) | Most homelabs, NAS (Synology, Unraid, TrueNAS), a VPS | Low |
+| [Kubernetes](#kubernetes) | k3s / Talos / existing clusters | Moderate |
+| [Proxmox](#proxmox) | Proxmox VE hosts: an LXC with no Docker, or a VM running Docker | Moderate |
 
 **Recommendation if you're unsure:** Docker Compose, either inside a small Proxmox LXC/VM or on whatever box already runs your containers. It has the fewest moving parts, and upgrades are just `docker compose pull && docker compose up -d`.
 

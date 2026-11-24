@@ -8,12 +8,12 @@ This is a survey of existing open-source, source-available and self-hostable tra
 
 | Project | License | Stack | Self-host | Sync / mobile | Strong import | Notes |
 |---|---|---|---|---|---|---|
-| [openGym](https://github.com/DuarteSantos8/openGym) | AGPL-3.0 (media proprietary) | `node:http` API, React 19 + Vite, **JSON files** (no DB) | Compose, GHCR amd64/arm64, Helm | Offline-first PWA + Capacitor apps, Apple Watch; per-profile revision with 409 → field merge | ✅ (+ FitNotes, Hevy) | Closest concept to ours. Weak points: JSON-file storage, proprietary exercise media |
-| [LiftTrace](https://github.com/traceapps/lifttrace) | AGPL-3.0 | Express 5 + better-sqlite3, Svelte 5 PWA | Single container, 2 volumes | Capacitor Android app (local-only SQLite mode), Wear OS; no iOS app | ✅ (+ Hevy, FitNotes, Jefit, Garmin FIT) | Closest architecturally. Young project; adds OIDC, coach sharing |
-| [wger](https://github.com/wger-project/wger) + [Flutter app](https://github.com/wger-project/flutter) | AGPL-3.0, data CC-BY-SA | Django + PostgreSQL, REST `/api/v2` | Multi-container compose | Online-only Flutter client | ❌ | Most mature; nutrition too. Main value: exercise DB |
+| [openGym](https://github.com/DuarteSantos8/openGym) | AGPL-3.0 (media proprietary) | `node:http` API, React 19 + Vite, **JSON files** (no DB) | Compose, GHCR amd64/arm64, Helm | Offline-first PWA + Capacitor apps, Apple Watch; per-profile revision with 409 → field merge | Yes (+ FitNotes, Hevy) | Closest concept to ours. Weak points: JSON-file storage, proprietary exercise media |
+| [LiftTrace](https://github.com/traceapps/lifttrace) | AGPL-3.0 | Express 5 + better-sqlite3, Svelte 5 PWA | Single container, 2 volumes | Capacitor Android app (local-only SQLite mode), Wear OS; no iOS app | Yes (+ Hevy, FitNotes, Jefit, Garmin FIT) | Closest architecturally. Young project; adds OIDC, coach sharing |
+| [wger](https://github.com/wger-project/wger) + [Flutter app](https://github.com/wger-project/flutter) | AGPL-3.0, data CC-BY-SA | Django + PostgreSQL, REST `/api/v2` | Multi-container compose | Online-only Flutter client | No | Most mature; nutrition too. Main value: exercise DB |
 | [Lyftr](https://github.com/Cawlumm/lyftr) | MIT | Go/Gin + SQLite; one Expo app for mobile + web | Compose, amd64/arm64/armv7 | — | planned | Same single React Native codebase idea |
-| [GymMane](https://github.com/InlitX/GymMane) | GPL-3.0 + 7(b) attribution | Flutter, self-host web build | Dockerfile | Android app has no network permission; syncs through Syncthing | ✅ many formats | Strong-like UX, body-map session generator |
-| [workout.cool](https://github.com/Snouzy/workout-cool) | MIT | Next.js + Prisma + Postgres | Compose | Web only | ❌ | Coaching/program platform rather than a logger |
+| [GymMane](https://github.com/InlitX/GymMane) | GPL-3.0 + 7(b) attribution | Flutter, self-host web build | Dockerfile | Android app has no network permission; syncs through Syncthing | Yes many formats | Strong-like UX, body-map session generator |
+| [workout.cool](https://github.com/Snouzy/workout-cool) | MIT | Next.js + Prisma + Postgres | Compose | Web only | No | Coaching/program platform rather than a logger |
 
 ## Mobile-first (impractical to self-host, or optional)
 
@@ -45,10 +45,10 @@ The built-in list in `packages/shared/src/exercises.ts` (185 exercises) was writ
 
 Open Workouts is **source-available** under the PolyForm Noncommercial License 1.0.0 (see [LICENSING.md](../LICENSING.md)). That determines what we can take from the projects above:
 
-- **Code or data under MIT, ISC, BSD, Apache-2.0 or Unlicense/public domain:** ✅ can be included. Keep their notices.
-- **AGPL/GPL/LGPL code** (openGym, LiftTrace, wger, Liftosaur, LiftLog, GymMane, Massive): ❌ can't be copied in. Those licenses require derived work to stay under open-source terms, which a non-commercial license is not. They remain a source of **ideas** only: features, UX, protocol design.
-- **CC-BY-SA data** (wger exercises, Everkinetic illustrations): ❌ don't bundle it. Share-alike would force those parts back under CC-BY-SA terms, which allow commercial use.
-- **Gym Visual media, ExerciseDB data:** ❌ proprietary.
+- **Code or data under MIT, ISC, BSD, Apache-2.0 or Unlicense/public domain:** can be included. Keep their notices.
+- **AGPL/GPL/LGPL code** (openGym, LiftTrace, wger, Liftosaur, LiftLog, GymMane, Massive): can't be copied in. Those licenses require derived work to stay under open-source terms, which a non-commercial license is not. They remain a source of **ideas** only: features, UX, protocol design.
+- **CC-BY-SA data** (wger exercises, Everkinetic illustrations): don't bundle it. Share-alike would force those parts back under CC-BY-SA terms, which allow commercial use.
+- **Gym Visual media, ExerciseDB data:** proprietary.
 
 **Where code can come from:** in practice, our own original code plus permissively licensed libraries. That's also how the codebase was built so far. The best data source is **free-exercise-db** (public domain).
 

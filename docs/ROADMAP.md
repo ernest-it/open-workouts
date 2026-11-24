@@ -1,77 +1,77 @@
 # Roadmap
 
-Status: ✅ done · 🟡 partial · ⏳ planned
+Checked items are done; unchecked items are planned.
 
 ## v0.1: foundation (done)
-- ✅ Data model, sync protocol, shared domain package with tests
-- ✅ Server: auth, tokens, device management, sync, Strong import/export, JSON backup
-- ✅ Web UI:
+- [x] Data model, sync protocol, shared domain package with tests
+- [x] Server: auth, tokens, device management, sync, Strong import/export, JSON backup
+- [x] Web UI:
   - workout logging (previous values, set types, RPE, rest timer, plate and warm-up calculators)
   - history and calendar, PRs
   - exercise records and charts
   - templates and folders
   - measurements, settings
-- ✅ Mobile app (Expo):
+- [x] Mobile app (Expo):
   - server connect or local-only mode
   - logging with rest timer, haptics and keep-awake
   - history, exercises, records, chart
   - templates (start from them / save a workout as one)
   - measurements, on-device Strong import
-- ✅ Docker image, Compose, Kubernetes manifests, Proxmox LXC installer, CI to GHCR
+- [x] Docker image, Compose, Kubernetes manifests, Proxmox LXC installer, CI to GHCR
 
 ## v0.2: AI insights (done)
-- ✅ Deterministic training digest: period-over-period totals, per-exercise e1RM trends, plateau detection, consistency, body weight
-- ✅ Workout comparison; auto-picks the most similar earlier session
-- ✅ LLM reports, comparisons and Q&A via Claude (Anthropic SDK) or any OpenAI-compatible endpoint (Ollama, etc.)
-- ✅ Scheduled weekly updates with ntfy, Discord or JSON webhook notifications
-- ✅ Read-only MCP server at `/mcp` for Claude Desktop, Claude Code and other assistants
-- ✅ Insights tab in the web UI and the mobile app
+- [x] Deterministic training digest: period-over-period totals, per-exercise e1RM trends, plateau detection, consistency, body weight
+- [x] Workout comparison; auto-picks the most similar earlier session
+- [x] LLM reports, comparisons and Q&A via Claude (Anthropic SDK) or any OpenAI-compatible endpoint (Ollama, etc.)
+- [x] Scheduled weekly updates with ntfy, Discord or JSON webhook notifications
+- [x] Read-only MCP server at `/mcp` for Claude Desktop, Claude Code and other assistants
+- [x] Insights tab in the web UI and the mobile app
 
 ## v0.2.x–0.3: polish and a new look (done)
-- ✅ In-app dialogs, template preview, small-screen fixes
-- ✅ Full backup export and restore (.json) on web and mobile; CSV export in Strong's format; exercise notes
-- ✅ New design, colour themes (light, dark, black; accent presets and custom colours) and a new app icon
+- [x] In-app dialogs, template preview, small-screen fixes
+- [x] Full backup export and restore (.json) on web and mobile; CSV export in Strong's format; exercise notes
+- [x] New design, colour themes (light, dark, black; accent presets and custom colours) and a new app icon
 
 ## v0.4: logging, templates and progress on the phone (this release)
-- ✅ Rest timer that keeps running in the background, with a notification when it's over
-- ✅ Supersets, reorder and replace exercises; swipe to delete a set with undo
-- ✅ Auto-fill from last time, ± steppers, mid-workout PR alerts and a finish screen with comparison and records
-- ✅ Template editor and folders on the phone; repeat last workout; suggested next template; update a template from a workout
-- ✅ "Last done" also matches imported workouts by name
-- ✅ Line charts with metrics and time ranges; body-weight chart
-- ✅ Weekly goal and streak; working sets per muscle group per week
-- ✅ History search and calendar on the phone
-- ✅ Five tabs with a running-workout bar, slide transitions and edge-swipe back
-- ✅ Friendlier first run (local first), sync status, automatic daily backups on the phone, update check
-- ✅ Number formatting (8,087.5 kg; 1h 18m), accessibility fixes, icons instead of emoji on the web
+- [x] Rest timer that keeps running in the background, with a notification when it's over
+- [x] Supersets, reorder and replace exercises; swipe to delete a set with undo
+- [x] Auto-fill from last time, ± steppers, mid-workout PR alerts and a finish screen with comparison and records
+- [x] Template editor and folders on the phone; repeat last workout; suggested next template; update a template from a workout
+- [x] "Last done" also matches imported workouts by name
+- [x] Line charts with metrics and time ranges; body-weight chart
+- [x] Weekly goal and streak; working sets per muscle group per week
+- [x] History search and calendar on the phone
+- [x] Five tabs with a running-workout bar, slide transitions and edge-swipe back
+- [x] Friendlier first run (local first), sync status, automatic daily backups on the phone, update check
+- [x] Number formatting (8,087.5 kg; 1h 18m), accessibility fixes, icons instead of emoji on the web
 
 ## Next: parity with the rest of the Strong experience
-- ⏳ Drag to reorder exercises and sets
-- ⏳ Warm-up calculator on mobile; separate warm-up rest duration
-- ⏳ Custom plate inventory and multiple bars
-- ⏳ Merge the public-domain free-exercise-db (~800 exercises with instructions and images)
-- ⏳ Strong measurements CSV import; Hevy and FitNotes importers
-- ⏳ Localised month names in imported dates (non-English Strong exports)
-- ⏳ Push notifications for AI reports from the mobile app (expo-notifications) as an alternative to ntfy
-- ⏳ Per-user choice of model; cost tracking per report
+- [ ] Drag to reorder exercises and sets
+- [ ] Warm-up calculator on mobile; separate warm-up rest duration
+- [ ] Custom plate inventory and multiple bars
+- [ ] Merge the public-domain free-exercise-db (~800 exercises with instructions and images)
+- [ ] Strong measurements CSV import; Hevy and FitNotes importers
+- [ ] Localised month names in imported dates (non-English Strong exports)
+- [ ] Push notifications for AI reports from the mobile app (expo-notifications) as an alternative to ntfy
+- [ ] Per-user choice of model; cost tracking per report
 
 ## Later: beyond Strong
-- ⏳ Progression rules: linear progression, double progression, RPE-based targets
-- ⏳ Programs (multi-week plans, e.g. 5/3/1, GZCLP)
-- ⏳ Apple Health / Health Connect export of workouts and body weight
-- ⏳ watchOS / Wear OS companion
-- ⏳ OIDC single sign-on (Authelia, Authentik, Keycloak)
-- ⏳ Admin page: list users, reset passwords, toggle registration
-- ⏳ Share a template or workout by link between users of the same server
-- ⏳ Optional PostgreSQL backend for large multi-user installs
-- ⏳ i18n
+- [ ] Progression rules: linear progression, double progression, RPE-based targets
+- [ ] Programs (multi-week plans, e.g. 5/3/1, GZCLP)
+- [ ] Apple Health / Health Connect export of workouts and body weight
+- [ ] watchOS / Wear OS companion
+- [ ] OIDC single sign-on (Authelia, Authentik, Keycloak)
+- [ ] Admin page: list users, reset passwords, toggle registration
+- [ ] Share a template or workout by link between users of the same server
+- [ ] Optional PostgreSQL backend for large multi-user installs
+- [ ] i18n
 
 ## Publishing & business
-- ⏳ Hosted sync service (paid tier): billing, plan limits, Postgres for many users, privacy policy
-- ⏳ Contributor agreement review by a lawyer; consider a trademark for the project name
+- [ ] Hosted sync service (paid tier): billing, plan limits, Postgres for many users, privacy policy
+- [ ] Contributor agreement review by a lawyer; consider a trademark for the project name
 
 ## Publishing the app
-- ✅ Signed APKs, an unsigned IPA and an iOS simulator build on the project's releases page (F-Droid is not an option: it only accepts open-source apps)
-- ⏳ EAS build profiles
-- ⏳ In-app "Open-source licenses" screen generated by `scripts/third-party-notices.mjs`
-- ⏳ App Store / Play Store listings
+- [x] Signed APKs, an unsigned IPA and an iOS simulator build on the project's releases page (F-Droid is not an option: it only accepts open-source apps)
+- [ ] EAS build profiles
+- [ ] In-app "Open-source licenses" screen generated by `scripts/third-party-notices.mjs`
+- [ ] App Store / Play Store listings
