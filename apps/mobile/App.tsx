@@ -1,4 +1,4 @@
-import { Activity, type ReactNode, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { Activity, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { ActivityIndicator, Animated, AppState, BackHandler, Easing, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -262,7 +262,7 @@ function Main({ account, onSignOut }: { account: Account; onSignOut: () => void 
   );
 }
 
-/** One tab's screen stack; only the top screen is rendered. */
+/** One tab's screen stack; only the top screen is shown, the ones below keep their state. */
 function TabStack({ stack, account, onSignOut, onBack }: { stack: Route[]; account: Account; onSignOut: () => void; onBack: () => void }) {
   const t = useTheme();
   const route = stack[stack.length - 1]!;
@@ -276,22 +276,41 @@ function TabStack({ stack, account, onSignOut, onBack }: { stack: Route[]; accou
           </View>
         </Pressable>
       )}
-      <SlideIn key={`${stack.length}:${route.name}:${'id' in route ? route.id : ''}`}>
-        {route.name === 'workout' && <WorkoutScreen />}
-        {route.name === 'templateDetail' && <TemplateDetailScreen id={route.id} />}
-        {route.name === 'templateEdit' && <TemplateEditScreen id={route.id} />}
-        {route.name === 'workoutDone' && <WorkoutDoneScreen id={route.id} />}
-        {route.name === 'history' && <HistoryScreen />}
-        {route.name === 'workoutDetail' && <WorkoutDetailScreen id={route.id} />}
-        {route.name === 'exercises' && <ExercisesScreen />}
-        {route.name === 'exerciseDetail' && <ExerciseDetailScreen id={route.id} />}
-        {route.name === 'profile' && <ProfileScreen account={account} />}
-        {route.name === 'measurement' && <MeasurementScreen id={route.id} />}
-        {route.name === 'measureLog' && <LogMeasurementsScreen />}
-        {route.name === 'insights' && <InsightsScreen account={account} />}
-        {route.name === 'settings' && <SettingsScreen account={account} onSignOut={onSignOut} />}
-      </SlideIn>
+      {/* Screens under the top one stay mounted but hidden, so going back keeps their state
+          (search text, filters, scroll position) instead of rebuilding them. */}
+      {stack.map((r, i) => {
+        const top = i === stack.length - 1;
+        return (
+          <Activity key={`${i}:${r.name}:${'id' in r ? r.id : ''}`} mode={top ? 'visible' : 'hidden'}>
+            <View style={{ flex: 1, display: top ? 'flex' : 'none' }}>
+              <SlideIn>
+                <RouteScreen route={r} account={account} onSignOut={onSignOut} />
+              </SlideIn>
+            </View>
+          </Activity>
+        );
+      })}
       {stack.length > 1 && route.name !== 'workoutDone' && <EdgeSwipeBack onBack={onBack} />}
+    </>
+  );
+}
+
+function RouteScreen({ route, account, onSignOut }: { route: Route; account: Account; onSignOut: () => void }) {
+  return (
+    <>
+      {route.name === 'workout' && <WorkoutScreen />}
+      {route.name === 'templateDetail' && <TemplateDetailScreen id={route.id} />}
+      {route.name === 'templateEdit' && <TemplateEditScreen id={route.id} />}
+      {route.name === 'workoutDone' && <WorkoutDoneScreen id={route.id} />}
+      {route.name === 'history' && <HistoryScreen />}
+      {route.name === 'workoutDetail' && <WorkoutDetailScreen id={route.id} />}
+      {route.name === 'exercises' && <ExercisesScreen />}
+      {route.name === 'exerciseDetail' && <ExerciseDetailScreen id={route.id} />}
+      {route.name === 'profile' && <ProfileScreen account={account} />}
+      {route.name === 'measurement' && <MeasurementScreen id={route.id} />}
+      {route.name === 'measureLog' && <LogMeasurementsScreen />}
+      {route.name === 'insights' && <InsightsScreen account={account} />}
+      {route.name === 'settings' && <SettingsScreen account={account} onSignOut={onSignOut} />}
     </>
   );
 }
@@ -300,29 +319,30 @@ function TabStack({ stack, account, onSignOut, onBack }: { stack: Route[]; accou
 // back from the left. Tab switches and resets leave it at 0 (no animation).
 let nextSlide: 1 | -1 | 0 = 0;
 
-/** Slides and fades a screen in when it's pushed or popped to. */
+/** Slides and fades a screen in when it's pushed, or shown again after going back. */
 function SlideIn({ children }: { children: ReactNode }) {
-  // Decided once, on mount; re-renders must not restart or flip the animation.
-  const [from] = useState(() => {
+  const x = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  // Layout effects run on mount and again whenever a hidden screen (inside <Activity>) is shown,
+  // before paint, so the screen starts offset without a flash.
+  useLayoutEffect(() => {
     const dir = nextSlide;
     nextSlide = 0;
-    return dir;
-  });
-  const anim = useRef(new Animated.Value(from ? 0 : 1)).current;
-  useEffect(() => {
-    if (from) Animated.timing(anim, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [anim, from]);
-  return (
-    <Animated.View
-      style={{
-        flex: 1,
-        opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }),
-        transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [from * 48, 0] }) }],
-      }}
-    >
-      {children}
-    </Animated.View>
-  );
+    if (!dir) {
+      x.setValue(0);
+      opacity.setValue(1);
+      return;
+    }
+    x.setValue(dir * 48);
+    opacity.setValue(0.4);
+    const a = Animated.parallel([
+      Animated.timing(x, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]);
+    a.start();
+    return () => a.stop();
+  }, [x, opacity]);
+  return <Animated.View style={{ flex: 1, opacity, transform: [{ translateX: x }] }}>{children}</Animated.View>;
 }
 
 /** Drag from the left edge to go back, like iOS and Android's back gesture. */

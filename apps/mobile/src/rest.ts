@@ -92,7 +92,9 @@ async function schedule() {
         data: { kind: 'rest' },
         sound: 'default',
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds, channelId: CHANNEL },
+      // An alarm-clock alarm: Android (and OEM battery savers) never defer these, unlike the default
+      // exact alarm, which some phones push back by minutes. Needs the exact-alarm permission (app.json).
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: current.until, channelId: CHANNEL, delivery: 'alarmClock' },
     });
     save();
   } catch (e) {
